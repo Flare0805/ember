@@ -25,37 +25,54 @@ from pathlib import Path
 try:
     from garminconnect import Garmin
 except ImportError:
-    sys.exit("The 'garminconnect' package is missing. Run:  pip install garminconnect")
+    sys.exit('The garminconnect package is missing. Run:  pip install "garminconnect>=0.3,<0.4"')
 
 TOKEN_DIR = Path.home() / ".garminconnect"
 OUT_DIR = Path(__file__).resolve().parent.parent / "garmin-export"
 LATEST = OUT_DIR / "ember-health-latest.json"
 
 
+RATE_LIMITED = (
+    "\nGarmin is temporarily blocking sign-ins from your internet connection (too many attempts, error 429).\n"
+    "Please wait at least an hour before running this again - every new attempt makes the block last longer."
+)
+
+
+def rate_limited(err):
+    text = f"{type(err).__name__} {err}".lower()
+    return "toomanyrequests" in text or "429" in text or "rate limit" in text
+
+
 def sign_in():
-    """Reuse the saved login if there is one; otherwise ask for email, password and a 2FA code if needed."""
-    if TOKEN_DIR.exists():
+    """Use the saved login if there is one; otherwise ask for email, password and a 2FA code if needed.
+
+    garminconnect 0.3+ saves the login into TOKEN_DIR by itself when that folder is passed to login().
+    """
+    store = str(TOKEN_DIR)
+    if TOKEN_DIR.is_dir() and any(TOKEN_DIR.iterdir()):
         try:
             client = Garmin()
-            client.login(str(TOKEN_DIR))
+            client.login(store)
             return client
-        except Exception:
-            print("Your saved Garmin login has expired. Please sign in again.")
+        except Exception as err:
+            if rate_limited(err):
+                sys.exit(RATE_LIMITED)
+            print("Your saved Garmin login no longer works. Please sign in again.")
 
     email = input("Garmin email: ").strip()
     password = getpass.getpass("Garmin password (not shown while typing): ")
-    try:
-        client = Garmin(email=email, password=password, return_on_mfa=True)
-    except TypeError:  # older library versions
-        client = Garmin(email=email, password=password, prompt_mfa=lambda: input("Verification code from Garmin: ").strip())
-
-    result = client.login()
-    if isinstance(result, tuple) and result and result[0] == "needs_mfa":
-        code = input("Verification code from Garmin (check your email or the Garmin app): ").strip()
-        client.resume_login(result[1], code)
-
+    client = Garmin(
+        email=email,
+        password=password,
+        prompt_mfa=lambda: input("Verification code from Garmin (check your email or the Garmin app): ").strip(),
+    )
     TOKEN_DIR.mkdir(parents=True, exist_ok=True)
-    client.garth.dump(str(TOKEN_DIR))
+    try:
+        client.login(store)
+    except Exception as err:
+        if rate_limited(err):
+            sys.exit(RATE_LIMITED)
+        sys.exit(f"\nCould not sign in to Garmin: {err}")
     print("Signed in. Your login is saved on this PC for next time.\n")
     return client
 
@@ -75,10 +92,16 @@ def dig(d, *path):
     return d
 
 
+class RateLimited(Exception):
+    """Garmin said 'too many requests': stop right away instead of making the block longer."""
+
+
 def safe(fn, *args):
     try:
         return fn(*args)
-    except Exception:
+    except Exception as err:
+        if rate_limited(err):
+            raise RateLimited() from err
         return None
 
 
@@ -127,9 +150,12 @@ def main():
             if data:
                 days[day.isoformat()] = data
             print(f"\r  {i + 1}/{days_back}  {day.isoformat()}  ({len(days)} days with data)", end="", flush=True)
-            time.sleep(0.25)  # be gentle with Garmin's servers
+            time.sleep(0.5)  # be gentle with Garmin's servers
     except KeyboardInterrupt:
         print("\nStopped. Saving what was downloaded so far.")
+    except RateLimited:
+        print("\nGarmin started limiting requests, so the download stopped early. Saving what came through;")
+        print("run it again in an hour or two to fetch the rest.")
     print()
 
     if not days:

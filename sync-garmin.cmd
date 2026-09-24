@@ -22,7 +22,7 @@ if not exist ".venv-garmin\Scripts\python.exe" (
   echo Setting up the Garmin downloader - first run only...
   %PY% -m venv .venv-garmin || goto :fail
   ".venv-garmin\Scripts\python.exe" -m pip install --quiet --upgrade pip
-  ".venv-garmin\Scripts\python.exe" -m pip install --quiet garminconnect || goto :fail
+  ".venv-garmin\Scripts\python.exe" -m pip install --quiet "garminconnect>=0.3,<0.4" || goto :fail
   echo.
 )
 
