@@ -1,11 +1,11 @@
 /* Ember service worker — offline cache for the app shell (only active when served over http/https) */
-const CACHE = 'ember-v2';
+const CACHE = 'ember-v3';
 const SHELL = [
   './', './index.html', './css/app.css', './manifest.webmanifest',
   './assets/icon.svg', './assets/apple-touch-icon.png', './assets/icon-192.png', './assets/icon-512.png',
   './js/core.js', './js/store.js', './js/ui.js', './js/focus-engine.js', './js/spotlight.js', './js/app.js',
   './js/views/today.js', './js/views/journal.js', './js/views/habits.js', './js/views/goals.js', './js/views/books.js',
-  './js/views/tasks.js', './js/views/focus.js', './js/views/insights.js', './js/views/settings.js',
+  './js/views/tasks.js', './js/views/focus.js', './js/views/insights.js', './js/views/settings.js', './js/views/health.js',
 ];
 
 self.addEventListener('install', (e) => {

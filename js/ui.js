@@ -342,9 +342,8 @@
 
   /** Vertical bars. data: [{label, value, tip, hi}] */
   chart.bars = (data, { height = 150, max, fmt = (v) => v, color = 'var(--accent)', every = 1 } = {}) => {
-    const m = max || Math.max(1, ...data.map((d) => d.value));
-    const nice = niceMax(m);
-    return `<div class="bars" style="--h:${height}px">
+    const nice = max || niceMax(Math.max(1, ...data.map((d) => d.value)));
+    return `<div class="bars ${data.length > 20 ? 'dense' : ''}" style="--h:${height}px">
       <div class="bars-grid">${[1, 0.5, 0]
         .map((f) => {
           const v = Math.round(nice * f * 10) / 10;
@@ -354,7 +353,7 @@
       <div class="bars-cols">${data
         .map(
           (d, i) => `<div class="bar-col ${d.hi ? 'hi' : ''}" data-tip="${esc(d.tip || `${d.label}: ${fmt(d.value)}`)}" tabindex="0">
-            <div class="bar-track"><div class="bar" style="height:${((d.value / nice) * 100).toFixed(1)}%;${d.value > 0 ? `min-height:3px;` : ''}background:${color}"></div></div>
+            <div class="bar-track"><div class="bar" style="height:${Math.min(100, (d.value / nice) * 100).toFixed(1)}%;${d.value > 0 ? `min-height:3px;` : ''}background:${color}"></div></div>
             <span class="bar-lbl">${i % every === 0 ? esc(d.label) : ''}</span></div>`
         )
         .join('')}</div></div>`;

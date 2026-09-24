@@ -5,6 +5,7 @@
 
   const NAV = [
     { id: 'today', label: 'Today', icon: 'today', group: 'Overview' },
+    { id: 'health', label: 'Health', icon: 'health', group: 'Overview' },
     { id: 'insights', label: 'Insights', icon: 'insights', group: 'Overview' },
     { id: 'journal', label: 'Journal', icon: 'journal', group: 'Life' },
     { id: 'habits', label: 'Habits', icon: 'habits', group: 'Life' },
@@ -123,7 +124,7 @@
   function paintNav() {
     const v = current.view, s = E.db(), T = E.today();
     document.querySelectorAll('[data-nav]').forEach((a) => a.classList.toggle('on', a.dataset.nav === v));
-    const moreViews = ['more', 'books', 'tasks', 'focus', 'insights', 'settings'];
+    const moreViews = ['more', 'health', 'books', 'tasks', 'focus', 'insights', 'settings'];
     document.querySelectorAll('[data-tab]').forEach((a) => a.classList.toggle('on', a.dataset.tab === v || (a.dataset.tab === 'more' && moreViews.includes(v))));
     const habitsLeft = E.habit.dueToday().filter((h) => !E.habit.done(h, T)).length;
     const tasksDue = s.tasks.filter((t) => !t.done && t.due && t.due <= T).length;
@@ -289,7 +290,7 @@
           e.preventDefault();
           b.click();
         }
-      } else if (/^[1-8]$/.test(e.key)) {
+      } else if (/^[1-9]$/.test(e.key) && NAV[+e.key - 1]) {
         location.hash = '#/' + NAV[+e.key - 1].id;
       } else if (e.key === ' ' && current.view === 'focus' && tag !== 'BUTTON' && tag !== 'A') {
         e.preventDefault();

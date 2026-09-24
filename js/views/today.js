@@ -72,6 +72,7 @@
             ${this.focusCard(focusMin)}
           </div>
           <div class="col">
+            ${this.healthCard(T)}
             ${this.moodCard(T)}
             ${this.readingCard()}
             ${this.goalsCard()}
@@ -135,6 +136,28 @@
           </div>
           <button class="round-btn ${running ? 'pause' : ''}" data-act="focus-toggle" aria-label="${running ? 'Pause' : 'Start'}">${E.icon(running ? 'pause' : 'play', 20)}</button>
         </div>
+      </section>`;
+    },
+
+    healthCard(T) {
+      const H = E.health, s = E.db();
+      const head = `<header class="card-head"><h2>${E.icon('health', 18)}Health</h2><a class="link" href="#/health">Details${E.icon('right', 15)}</a></header>`;
+      if (!Object.keys(s.health).length)
+        return `<section class="card">${head}
+          <div class="card-empty">Add sleep, stress and Body Battery from your Garmin to see how they shape your days.</div>
+          <div class="btn-row"><button class="btn btn-tinted sm" data-act="health-log">${E.icon('edit', 14)}Log today</button><button class="btn btn-plain sm" data-act="health-help">${E.icon('watch', 14)}Sync with Garmin</button></div>
+        </section>`;
+      const d = s.health[T];
+      const top = H.insights(1)[0];
+      return `<section class="card">${head}
+        <div class="h-mini">${['sleep', 'bb', 'stress', 'rhr']
+          .map((k) => {
+            const m = H.metric(k), v = H.val(T, k);
+            return `<div class="h-mini-item" style="--c:${m.color}"><span class="h-ic">${E.icon(m.icon, 14)}</span><b>${v == null ? '—' : m.fmt(v)}</b><span>${m.short || m.label}</span></div>`;
+          })
+          .join('')}</div>
+        ${d ? '' : `<div class="h-nolog"><span>Today isn't logged yet</span><button class="btn btn-tinted sm" data-act="health-log">${E.icon('plus', 14)}Log</button></div>`}
+        ${top ? `<p class="h-tip">${E.icon('sparkles', 15)}<span>${top.text}</span></p>` : ''}
       </section>`;
     },
 
@@ -216,6 +239,8 @@
       'habit-tap': (el) => E.shared.habitTap(el),
       'task-done': (el) => E.shared.completeTask(el),
       'focus-toggle': () => E.focus.toggle(),
+      'health-log': () => E.health.logSheet(),
+      'health-help': () => E.health.helpSheet(),
       spotlight: () => E.spotlight.open(),
       'book-open': (el) => E.views.books.openBook(el.dataset.id),
       'book-progress': (el) => E.views.books.progressSheet(el.dataset.id),

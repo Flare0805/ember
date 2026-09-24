@@ -131,6 +131,11 @@
 
     observations(habits, T) {
       const out = [];
+      // Strongest link between Garmin/health data and productivity
+      if (Object.keys(E.db().health).length) {
+        const hf = E.health.insights(1)[0];
+        if (hf) out.push(`${hf.text} <a class="link" href="#/health">See Health</a>`);
+      }
       // Mood on strong-habit days vs. other days
       const good = [], weak = [];
       for (let i = 0; i < 90; i++) {

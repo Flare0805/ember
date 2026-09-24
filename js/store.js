@@ -26,6 +26,7 @@
     ],
     tasks: [],
     focus: { sessions: [], timer: null },
+    health: {}, // { 'YYYY-MM-DD': { sleep, sleepScore, stress, bb, rhr, hrv, steps, src, at } }
   });
 
   function merge(base, data) {
@@ -35,6 +36,7 @@
     out.focus = { ...base.focus, ...(data.focus || {}) };
     for (const k of ['journal', 'goals', 'habits', 'books', 'lists', 'tasks']) if (!Array.isArray(out[k])) out[k] = base[k];
     if (!out.lists.length) out.lists = base.lists;
+    if (!out.health || typeof out.health !== 'object' || Array.isArray(out.health)) out.health = {};
     return out;
   }
 
@@ -223,13 +225,42 @@
     };
     let seed = 42;
     const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+    const gauss = () => Math.sqrt(-2 * Math.log(rnd() || 1e-9)) * Math.cos(2 * Math.PI * rnd());
+    const clamp = E.clamp;
+
+    // Health (as if synced from a Garmin watch). Sleep drives the rest, so the comparisons show real patterns.
+    s.health = {};
+    for (let i = 0; i < 120; i++) {
+      const k = ago(i), dw = E.dow(k), weekend = dw === 0 || dw === 6;
+      const sleep = Math.round(clamp(425 + gauss() * 45 + (weekend ? 30 : 0), 290, 560));
+      const sleepScore = Math.round(clamp(38 + ((sleep - 290) / 270) * 52 + gauss() * 6, 30, 97));
+      const stress = Math.round(clamp(36 - (sleep - 420) / 10 + gauss() * 6 + (weekend ? -6 : 4), 12, 72));
+      const day = {
+        sleep, sleepScore, stress,
+        bb: Math.round(clamp(30 + sleepScore * 0.6 - stress * 0.25 + gauss() * 5, 12, 100)),
+        rhr: Math.round(50 + stress * 0.1 + gauss() * 1.4),
+        hrv: Math.round(clamp(66 - stress * 0.4 + gauss() * 5, 20, 110)),
+        steps: Math.round(clamp(7200 + gauss() * 2300 + ([1, 3, 5].includes(dw) ? 3500 : 0), 1200, 23000)),
+        src: 'garmin', at: Date.now(),
+      };
+      if (i === 0) delete day.steps; // today isn't over yet
+      s.health[k] = day;
+    }
+    // Make a few days match the sample journal entries
+    Object.assign(s.health[ago(2)], { sleep: 318, sleepScore: 41, stress: 52, bb: 34 });
+    Object.assign(s.health[ago(5)], { sleep: 352, sleepScore: 48, stress: 61, bb: 29 });
+    Object.assign(s.health[ago(25)], { sleep: 540, sleepScore: 58, stress: 58, bb: 22, rhr: 61, hrv: 31 });
+    Object.assign(s.health[ago(8)], { sleep: 505, sleepScore: 88, steps: 24100 });
+    [1, 21, 0].forEach((d) => Object.assign(s.health[ago(d)], { sleep: 492, sleepScore: 90, stress: 22, bb: 91 }));
+    s.settings.healthImportedAt = Date.now() - 3 * 3600e3;
+    const hd = (k) => s.health[k] || { bb: 60, sleep: 420 };
 
     // Habits
     const mk = (name, emoji, color, days, target, p, startAgo) => {
       const h = { id: E.uid(), name, emoji, color, days, target, log: {}, start: ago(startAgo), archived: false, createdAt: ts(ago(startAgo)) };
       for (let i = 1; i <= startAgo; i++) {
         const k = ago(i);
-        if (days.includes(E.dow(k)) && rnd() < p) h.log[k] = target;
+        if (days.includes(E.dow(k)) && rnd() < p + (hd(k).bb - 60) / 160) h.log[k] = target;
         else if (target > 1 && rnd() < 0.5) h.log[k] = Math.max(1, Math.floor(target * rnd()));
       }
       return h;
@@ -315,8 +346,9 @@
     // Focus sessions
     const labels = ['Deep work', 'Spanish', 'Reading', 'Project', 'Emails'];
     s.focus.sessions = [];
-    for (let d = 13; d >= 0; d--) {
-      const n = d === 0 ? 2 : Math.floor(rnd() * 5);
+    for (let d = 59; d >= 0; d--) {
+      // Well-rested days get more focus sessions
+      const n = d === 0 ? 2 : Math.round(clamp((hd(ago(d)).sleep - 330) / 45 + gauss() * 0.9, 0, 6));
       for (let i = 0; i < n; i++) s.focus.sessions.push({ id: E.uid(), start: ts(ago(d), 9 + i * 2, 0), minutes: 25, label: labels[Math.floor(rnd() * labels.length)] });
     }
 

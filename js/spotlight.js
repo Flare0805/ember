@@ -28,6 +28,8 @@
       { icon: 'goals', title: 'New goal', sub: 'Action', run: () => { location.hash = '#/goals'; setTimeout(() => E.views.goals.openGoal(), 50); } },
       { icon: 'books', title: 'Add a book', sub: 'Action', run: () => { location.hash = '#/books'; setTimeout(() => E.views.books.addBook(), 50); } },
       { icon: 'focus', title: E.focus.t().running ? 'Pause focus timer' : 'Start focus timer', sub: 'Action', run: () => { E.focus.toggle(); location.hash = '#/focus'; } },
+      { icon: 'health', title: 'Log sleep & health', sub: 'Action', run: () => { location.hash = '#/health'; setTimeout(() => E.health.logSheet(), 50); } },
+      { icon: 'watch', title: 'Import Garmin data', sub: 'Action', run: () => E.health.pickFile() },
       ...E.app.NAV.concat([{ id: 'settings', label: 'Settings', icon: 'settings' }]).map((n) => ({ icon: n.icon, title: `Go to ${n.label}`, sub: 'Navigation', run: go('#/' + n.id) })),
     ];
   }

@@ -15,7 +15,7 @@
       const bytes = new Blob([JSON.stringify(s)]).size;
       const counts = [
         [s.journal.length, 'entries'], [s.habits.length, 'habits'], [s.goals.length, 'goals'],
-        [s.books.length, 'books'], [s.tasks.length, 'tasks'], [s.focus.sessions.length, 'focus sessions'],
+        [s.books.length, 'books'], [s.tasks.length, 'tasks'], [s.focus.sessions.length, 'focus sessions'], [Object.keys(s.health).length, 'health days'],
       ];
       const backupAge = st.lastBackup ? E.timeAgo(st.lastBackup) : 'never';
       const needsBackup = !st.lastBackup || Date.now() - st.lastBackup > 30 * 864e5;
@@ -44,6 +44,7 @@
             ${row('calendar', '#FF453A', 'Week starts on', ui.seg('weekstart', [{ value: '1', label: 'Monday' }, { value: '0', label: 'Sunday' }], String(st.weekStart), 'small'))}
             ${row('books', '#FF9F0A', 'Yearly reading goal', ui.stepper('reading', st.readingGoal, ' books'))}
             ${row('focus', '#FF5E3A', 'Focus timer', `<span class="muted">${st.focus.work} / ${st.focus.short} / ${st.focus.long} min</span>${E.icon('right', 16)}`, 'data-act="focus-settings" role="button" tabindex="0"')}
+            ${row('watch', '#FF375F', 'Garmin sync', `<span class="muted">${st.healthImportedAt ? `imported ${E.timeAgo(st.healthImportedAt)}` : 'not set up'}</span>${E.icon('right', 16)}`, 'data-act="garmin" role="button" tabindex="0"')}
           </section>
 
           <div class="set-label">Your data</div>
@@ -62,7 +63,7 @@
 
           <div class="set-label kbd-section">Keyboard shortcuts</div>
           <section class="set-group shortcuts kbd-section">
-            ${[['Ctrl', 'K'], ['N'], ['1', '–', '8'], ['Space'], ['Esc']]
+            ${[['Ctrl', 'K'], ['N'], ['1', '–', '9'], ['Space'], ['Esc']]
               .map((keys, i) => `<div class="set-row"><span class="set-title">${['Search everything', 'New item on the current page', 'Jump to a section', 'Start / pause the focus timer (Focus page)', 'Close a sheet or dialog'][i]}</span><span class="set-right">${keys.map((k) => (k === '–' ? '–' : `<kbd>${k}</kbd>`)).join(' ')}</span></div>`)
               .join('')}
           </section>
@@ -81,6 +82,7 @@
       weekstart: (el) => E.commit((s) => (s.settings.weekStart = +el.dataset.value)),
       reading: (el) => E.commit((s) => (s.settings.readingGoal = E.clamp(s.settings.readingGoal + +el.dataset.delta, 1, 365))),
       'focus-settings': () => E.views.focus.settingsSheet(),
+      garmin: () => E.health.helpSheet(),
       async export() {
         const name = `ember-backup-${E.today()}.json`, json = E.store.exportData();
         const done = () => {
@@ -159,7 +161,9 @@
     title: 'More',
     render() {
       const s = E.db(), T = E.today();
+      const lastSleep = E.health.val(T, 'sleep');
       const items = [
+        ['#/health', 'health', '#FF375F', 'Health', lastSleep != null ? `${E.health.hm(lastSleep)} sleep` : ''],
         ['#/books', 'books', '#FF9F0A', 'Books', `${s.books.filter((b) => b.status === 'reading').length} reading`],
         ['#/tasks', 'tasks', '#0A84FF', 'Tasks', `${s.tasks.filter((t) => !t.done && t.due && t.due <= T).length} due`],
         ['#/focus', 'focus', '#FF5E3A', 'Focus', E.fmtMin(E.focusStats.minutesOn(T)) + ' today'],

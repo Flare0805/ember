@@ -19,6 +19,24 @@ Notes:
 - The phone and the PC each keep their own data. To move data between them, use Settings → **Export backup** (on iPhone this opens the share sheet: Save to Files, iCloud Drive or AirDrop), then **Import backup** on the other device.
 - iOS pauses the app when it's closed or the screen locks. The focus timer catches up when you come back, but it can't play the chime while the app is closed.
 
+## Garmin (sleep, stress, Body Battery…)
+
+The **Health** page shows sleep, sleep score, stress, Body Battery, resting heart rate, HRV and steps. It compares them with your focus time, finished tasks, habits and mood.
+
+Garmin has no public connection for personal apps, so there are two ways to get the data in:
+
+1. **Log by hand** (any device): Health → **Log**, and copy the numbers from the Garmin Connect app.
+2. **Automatic download** (Windows PC):
+   - Install Python once: `winget install Python.Python.3.12`
+   - Double-click **`sync-garmin.cmd`**. The first time, sign in with your Garmin email and password in that window. They go only to Garmin, and the login is remembered on this PC (`~/.garminconnect`).
+   - The first run downloads 180 days, later runs 30. For a full year, run `sync-garmin.cmd --days 365` in a terminal.
+   - Then in Ember: Health → **Import file** → `garmin-export/ember-health-latest.json`.
+   - **For the iPhone:** use **`sync-garmin-to-onedrive.cmd`** instead. It also saves a copy to `OneDrive\Ember`, which you can import from the Files app (with the OneDrive app installed).
+
+The download uses the unofficial [`garminconnect`](https://github.com/cyberjunky/python-garminconnect) library, so it can break if Garmin changes their site. `garmin-export/` is in `.gitignore`, so your health data never ends up on GitHub.
+
+CSV import also works. It needs a `date` column plus any of: `sleep` (minutes) or `sleep hours`, `sleep score`, `stress`, `body battery`, `resting hr`, `hrv`, `steps`. Commas or semicolons both work.
+
 ## What's inside
 
 | Section | What it does |
