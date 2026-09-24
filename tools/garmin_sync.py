@@ -122,6 +122,11 @@ def day_data(client, day):
     secs = num(dto.get("sleepTimeSeconds"))
     out["sleep"] = secs / 60 if secs else None
     out["sleepScore"] = num(dig(dto, "sleepScores", "overall", "value"))
+    # Sleep stages in minutes (0 is a real value here, e.g. no time awake)
+    for key, field in (("deep", "deepSleepSeconds"), ("light", "lightSleepSeconds"), ("rem", "remSleepSeconds"), ("awake", "awakeSleepSeconds")):
+        v = dto.get(field)
+        ok = secs and isinstance(v, (int, float)) and not isinstance(v, bool) and v >= 0
+        out[key] = v / 60 if ok else None
     if out["rhr"] is None:
         out["rhr"] = num(sleep.get("restingHeartRate"))
 

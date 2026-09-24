@@ -117,32 +117,54 @@
     });
 
   /* ---------- context menu ---------- */
-  ui.menu = function (anchor, items) {
+  /** Pop-up menu. items: [{label, icon?, danger?, checked?, onClick}] or '-'. opts.align: 'right' (default) | 'left' */
+  ui.menu = function (anchor, items, opts = {}) {
     document.querySelectorAll('.menu-pop').forEach((m) => m.remove());
     const m = document.createElement('div');
     m.className = 'menu-pop';
     m.setAttribute('role', 'menu');
+    const hasCheck = items.some((it) => it && it.checked !== undefined);
     m.innerHTML = items
       .map((it, i) =>
         it === '-'
           ? '<div class="menu-sep"></div>'
-          : `<button role="menuitem" class="menu-item ${it.danger ? 'danger' : ''}" data-i="${i}">${it.icon ? E.icon(it.icon, 17) : ''}<span>${esc(it.label)}</span></button>`
+          : `<button role="${hasCheck ? 'menuitemradio' : 'menuitem'}" ${hasCheck ? `aria-checked="${!!it.checked}"` : ''} class="menu-item ${it.danger ? 'danger' : ''}" data-i="${i}">${hasCheck ? `<span class="menu-check">${it.checked ? E.icon('check', 15) : ''}</span>` : ''}${it.icon ? E.icon(it.icon, 17) : ''}<span>${esc(it.label)}</span></button>`
       )
       .join('');
     document.body.appendChild(m);
     const r = anchor.getBoundingClientRect();
+    if (opts.align === 'left') m.style.minWidth = Math.max(210, r.width) + 'px';
     const w = m.offsetWidth, h = m.offsetHeight;
-    let left = r.right - w, top = r.bottom + 6;
+    let left = opts.align === 'left' ? Math.min(r.left, innerWidth - w - 8) : r.right - w, top = r.bottom + 6;
+    if (opts.align === 'left') m.style.transformOrigin = 'top left';
     if (left < 8) left = 8;
     if (top + h > innerHeight - 8) top = r.top - h - 6;
     m.style.left = left + 'px';
     m.style.top = Math.max(8, top) + 'px';
-    requestAnimationFrame(() => m.classList.add('open'));
+    requestAnimationFrame(() => {
+      m.classList.add('open');
+      const first = m.querySelector('[aria-checked="true"]') || m.querySelector('.menu-item');
+      if (first && document.activeElement === anchor) first.focus({ preventScroll: true });
+    });
+    // Arrow keys move between items (menus opened from the keyboard stay usable)
+    m.addEventListener('keydown', (e) => {
+      if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
+      e.preventDefault();
+      const all = [...m.querySelectorAll('.menu-item')], i = all.indexOf(document.activeElement);
+      const next = all[(i + (e.key === 'ArrowDown' ? 1 : -1) + all.length) % all.length];
+      if (next) next.focus();
+    });
     const close = () => {
       m.remove();
       document.removeEventListener('pointerdown', outside, true);
       document.removeEventListener('keydown', key, true);
+      document.removeEventListener('scroll', onScroll, true);
+      window.removeEventListener('resize', close);
     };
+    // The menu is fixed on screen, so close it when its button scrolls away
+    const onScroll = (e) => { if (!m.contains(e.target)) close(); };
+    document.addEventListener('scroll', onScroll, true);
+    window.addEventListener('resize', close);
     const outside = (e) => { if (!m.contains(e.target)) close(); };
     const key = (e) => { if (e.key === 'Escape') { e.stopPropagation(); close(); } };
     setTimeout(() => {

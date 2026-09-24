@@ -4,6 +4,9 @@ setlocal
 cd /d "%~dp0"
 title Ember - Garmin sync
 
+rem Already set up? Use the private Python environment directly (no PATH needed).
+if exist ".venv-garmin\Scripts\python.exe" goto :run
+
 set "PY="
 py -3 -c "import sys" >nul 2>nul && set "PY=py -3"
 if not defined PY python -c "import sys" >nul 2>nul && set "PY=python"
@@ -18,14 +21,13 @@ if not defined PY (
   exit /b 1
 )
 
-if not exist ".venv-garmin\Scripts\python.exe" (
-  echo Setting up the Garmin downloader - first run only...
-  %PY% -m venv .venv-garmin || goto :fail
-  ".venv-garmin\Scripts\python.exe" -m pip install --quiet --upgrade pip
-  ".venv-garmin\Scripts\python.exe" -m pip install --quiet "garminconnect>=0.3,<0.4" || goto :fail
-  echo.
-)
+echo Setting up the Garmin downloader - first run only...
+%PY% -m venv .venv-garmin || goto :fail
+".venv-garmin\Scripts\python.exe" -m pip install --quiet --upgrade pip
+".venv-garmin\Scripts\python.exe" -m pip install --quiet "garminconnect>=0.3,<0.4" || goto :fail
+echo.
 
+:run
 ".venv-garmin\Scripts\python.exe" tools\garmin_sync.py %*
 echo.
 pause

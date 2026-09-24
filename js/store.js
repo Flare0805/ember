@@ -252,6 +252,13 @@
     Object.assign(s.health[ago(25)], { sleep: 540, sleepScore: 58, stress: 58, bb: 22, rhr: 61, hrv: 31 });
     Object.assign(s.health[ago(8)], { sleep: 505, sleepScore: 88, steps: 24100 });
     [1, 21, 0].forEach((d) => Object.assign(s.health[ago(d)], { sleep: 492, sleepScore: 90, stress: 22, bb: 91 }));
+    // Sleep stages: better-scored nights get more deep sleep; stressful days more time awake
+    Object.values(s.health).forEach((d) => {
+      d.deep = Math.round(d.sleep * clamp(0.13 + (d.sleepScore - 60) / 600 + gauss() * 0.02, 0.08, 0.26));
+      d.rem = Math.round(d.sleep * clamp(0.21 + gauss() * 0.03, 0.12, 0.3));
+      d.light = d.sleep - d.deep - d.rem;
+      d.awake = Math.round(clamp(14 + gauss() * 9 + (d.stress - 35) / 3, 0, 60));
+    });
     s.settings.healthImportedAt = Date.now() - 3 * 3600e3;
     const hd = (k) => s.health[k] || { bb: 60, sleep: 420 };
 

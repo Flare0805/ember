@@ -19,6 +19,18 @@
     { k: 'rhr', label: 'Resting HR', short: 'Rest HR', icon: 'heart', color: '#FF375F', better: -1, fmt: int, unit: ' bpm', lo: 25, hi: 150, chart: 'line', hint: 'Beats per minute' },
     { k: 'hrv', label: 'HRV', icon: 'pulse', color: '#BF5AF2', better: 1, fmt: int, unit: ' ms', lo: 5, hi: 300, chart: 'line', hint: 'Overnight average' },
     { k: 'steps', label: 'Steps', icon: 'steps', color: '#FF6B3D', better: 1, fmt: int, lo: 0, hi: 150000, chart: 'bars', hint: 'Total for the day' },
+    // Sleep stages you can compare against productivity (not shown as tiles)
+    { k: 'deep', label: 'Deep sleep', icon: 'moon', color: '#4C6EF0', better: 1, fmt: hm, axis: (v) => `${(v / 60).toFixed(1)}h`, lo: 0, hi: 1080, extra: true, hint: 'Deep sleep last night' },
+    { k: 'rem', label: 'REM sleep', icon: 'moon', color: '#A55FE3', better: 1, fmt: hm, axis: (v) => `${(v / 60).toFixed(1)}h`, lo: 0, hi: 1080, extra: true, hint: 'REM sleep last night' },
+  ];
+  const MAIN = METRICS.filter((m) => !m.extra);
+
+  /* Sleep stages, stacked bottom → top. Colors validated for the dark surface (lightness band, CVD, contrast). */
+  const STAGES = [
+    { k: 'deep', label: 'Deep', color: '#4C6EF0' },
+    { k: 'light', label: 'Light', color: '#1E9FB0' },
+    { k: 'rem', label: 'REM', color: '#A55FE3' },
+    { k: 'awake', label: 'Awake', color: '#E0608E' },
   ];
 
   /* Productivity measures from the rest of Ember */
@@ -30,7 +42,7 @@
   ];
 
   const H = (E.health = {
-    METRICS, PROD, hm,
+    METRICS, PROD, STAGES, hm,
     metric: (k) => METRICS.find((m) => m.k === k),
     prod: (k) => PROD.find((m) => m.k === k),
     fmt: (m, v) => (v == null ? '—' : m.fmt(v) + (m.unit || '')),
@@ -139,6 +151,8 @@
         rhr: (v) => `when your resting heart rate is <b>${Math.round(v)}+ bpm</b>`,
         hrv: (v) => `when your HRV is <b>${Math.round(v)}+ ms</b>`,
         steps: (v) => `on days with <b>${int(v)}+</b> steps`,
+        deep: (v) => `after nights with at least <b>${hm(v)}</b> of deep sleep`,
+        rem: (v) => `after nights with at least <b>${hm(v)}</b> of REM sleep`,
       }[hk](c.med);
       const hi = c.hiAvg, lo = c.loAvg, up = hi >= lo;
       const rel = lo > 0 ? `${Math.round((Math.abs(hi - lo) / lo) * 100)}% ` : '';
@@ -174,7 +188,8 @@
     clean(v) {
       const out = {};
       if (!v || typeof v !== 'object') return out;
-      METRICS.forEach((m) => {
+      const fields = METRICS.concat(STAGES.filter((s) => !H.metric(s.k)).map((s) => ({ k: s.k, lo: 0, hi: 1080 })));
+      fields.forEach((m) => {
         const n = typeof v[m.k] === 'string' ? parseFloat(v[m.k].replace(',', '.')) : v[m.k];
         if (typeof n === 'number' && isFinite(n) && n >= m.lo && n <= m.hi) out[m.k] = Math.round(n);
       });
@@ -287,7 +302,7 @@
           <div class="form-row"><span class="form-row-title">${E.icon('calendar', 16)} Day</span><input type="date" class="field-date" data-m="date" value="${k}" max="${E.today()}"></div>
         </div>
         <div class="form-note">Copy the numbers from the Garmin Connect app. Leave anything blank you don't track. Sleep belongs to the day you woke up.</div>
-        <div class="form-group list-group-inset">${METRICS.map(inp).join('')}</div>
+        <div class="form-group list-group-inset">${MAIN.map(inp).join('')}</div>
         ${E.db().health[k] ? `<button class="btn btn-danger wide" data-act="del">${E.icon('trash', 16)}Delete this day</button>` : ''}`;
       const read = (api) => {
         const out = {};
@@ -332,8 +347,13 @@
             return false;
           }
           E.commit((s) => {
-            if (!Object.keys(c).length) delete s.health[k];
-            else s.health[k] = { ...c, src: 'manual', at: Date.now() };
+            // Replace the fields shown in this sheet; keep the rest (e.g. Garmin sleep stages)
+            const day = { ...(s.health[k] || {}) };
+            MAIN.forEach((m) => delete day[m.k]);
+            Object.assign(day, c);
+            const hasData = [...MAIN, ...STAGES].some((m) => day[m.k] != null);
+            if (!hasData) delete s.health[k];
+            else s.health[k] = { ...day, src: 'manual', at: Date.now() };
           });
           ui.toast('Health data saved', 'health');
         },
@@ -419,6 +439,70 @@
     return E.chart.line(pts, { height: 150, min: lo, max: hi, yLabels: [lo, mid, hi].map((v) => ({ v, label: `<small>${v}</small>` })), color: m.color, every: 7 });
   }
 
+  /* ----- sleep stages ----- */
+  const hasStages = (d) => !!d && STAGES.some((st) => typeof d[st.k] === 'number');
+
+  /** Last night as one horizontal bar split into stages, with a legend that also labels the 30-day chart. */
+  function lastNight(k) {
+    const d = E.db().health[k];
+    const parts = STAGES.map((st) => ({ ...st, v: d[st.k] || 0 }));
+    const total = parts.reduce((a, p) => a + p.v, 0) || 1;
+    const pct = (v) => Math.round((v / total) * 100);
+    return `<div class="ln">
+      <div class="ln-head"><span>${k === E.today() ? 'Last night' : `Night before ${E.relDay(k).toLowerCase()}`}</span>
+        <span><b>${hm(d.sleep != null ? d.sleep : total - (d.awake || 0))}</b> asleep${d.sleepScore ? ` · score <b>${d.sleepScore}</b>` : ''}</span></div>
+      <div class="ln-bar" role="img" aria-label="${esc(parts.map((p) => `${p.label} ${hm(p.v)}`).join(', '))}">${parts
+        .filter((p) => p.v > 0)
+        .map((p) => `<i style="flex:${p.v} 0 0;background:${p.color}" data-tip="${p.label}: ${hm(p.v)} (${pct(p.v)}%)"></i>`)
+        .join('')}</div>
+      <div class="ln-legend">${parts
+        .map((p) => `<div class="ln-item"><span class="sw" style="background:${p.color}"></span><span class="ln-lbl">${p.label}</span><b>${hm(p.v)}</b><span class="ln-pct">${pct(p.v)}%</span></div>`)
+        .join('')}</div>
+    </div>`;
+  }
+
+  /** 30 nights as stacked bars (deep at the bottom, awake on top). Nights without stages show as one neutral bar. */
+  function stageBars(days) {
+    const s = E.db().health, T = E.today();
+    const totals = days.map((k) => {
+      const d = s[k];
+      return d ? Math.max(STAGES.reduce((a, x) => a + (d[x.k] || 0), 0), d.sleep || 0) : 0;
+    });
+    const maxH = Math.max(10, Math.ceil(Math.max(...totals) / 60));
+    const grid = [1, 0.5, 0].map((f) => `<div class="gl" style="bottom:${f * 100}%"><span>${Math.round(maxH * f)}h</span></div>`).join('');
+    const cols = days
+      .map((k, i) => {
+        const d = s[k], n = E.parse(k).getDate();
+        const lbl = n % 5 === 0 || k === T ? String(n) : '';
+        if (!totals[i]) return `<div class="bar-col"><div class="bar-track"></div><span class="bar-lbl">${lbl}</span></div>`;
+        const staged = hasStages(d);
+        const segs = staged
+          ? STAGES.slice().reverse().filter((x) => d[x.k] > 0).map((x) => `<i style="flex:${d[x.k]} 0 0;background:${x.color}"></i>`).join('')
+          : '<i class="nostage"></i>';
+        const tip = `${E.fmt(k, { weekday: 'short', month: 'short', day: 'numeric' })}: ${hm(d.sleep || totals[i])} asleep${staged ? ' · ' + STAGES.map((x) => `${x.label} ${hm(d[x.k] || 0)}`).join(' · ') : ''}`;
+        return `<div class="bar-col ${k === T ? 'hi' : ''}" data-tip="${esc(tip)}" tabindex="0">
+          <div class="bar-track"><div class="stack" style="height:${Math.min(100, (totals[i] / (maxH * 60)) * 100).toFixed(1)}%">${segs}</div></div>
+          <span class="bar-lbl">${lbl}</span></div>`;
+      })
+      .join('');
+    return `<div class="bars dense stacked" style="--h:160px"><div class="bars-grid">${grid}</div><div class="bars-cols">${cols}</div></div>`;
+  }
+
+  function sleepCard(avg30) {
+    const T = E.today(), s = E.db().health;
+    let lnKey = null;
+    for (let i = 0; i < 3 && !lnKey; i++) if (hasStages(s[E.addDays(T, -i)])) lnKey = E.addDays(T, -i);
+    const days = Array.from({ length: 30 }, (_, i) => E.addDays(T, i - 29));
+    const anyStages = days.some((k) => hasStages(s[k]));
+    return `<section class="card sleep-card">
+      <header class="card-head"><h2>${E.icon('moon', 18)}Sleep · 30 days</h2>${avg30 != null ? `<span class="muted small">Avg ${hm(avg30)}</span>` : ''}</header>
+      ${lnKey ? lastNight(lnKey) : ''}
+      ${anyStages ? stageBars(days) : trend(H.metric('sleep'))}
+      ${anyStages && !lnKey ? `<div class="stage-legend">${STAGES.map((x) => `<span><i style="background:${x.color}"></i>${x.label}</span>`).join('')}</div>` : ''}
+      <div class="chart-note">${anyStages ? 'Each bar is one night split into sleep stages. Hover or tap a bar for the details.' : 'Time asleep per night. Sleep stages appear after a Garmin import.'}</div>
+    </section>`;
+  }
+
   /* ----- page ----- */
   const V = (E.views.health = {
     title: 'Health',
@@ -453,7 +537,7 @@
       const found = H.insights(5, table);
       const T = E.today();
 
-      const tiles = METRICS.map((mt) => {
+      const tiles = MAIN.map((mt) => {
         const v = H.val(ref, mt.k);
         const base = H.avg(mt.k, E.addDays(ref, -1), 7);
         let delta = '';
@@ -483,18 +567,22 @@
         <div class="h-tiles">${tiles}</div>
 
         <div class="cols-2">
-          <section class="card">
+          ${
+            m.k === 'sleep'
+              ? sleepCard(avg30)
+              : `<section class="card">
             <header class="card-head"><h2>${E.icon(m.icon, 18)}${m.label} · 30 days</h2>${avg30 != null ? `<span class="muted small">Avg ${H.fmt(m, avg30)}</span>` : ''}</header>
             ${trend(m)}
             <div class="chart-note">${esc(m.hint)}. Tap a tile above to switch metric.</div>
-          </section>
+          </section>`
+          }
 
           <section class="card">
             <header class="card-head"><h2>${E.icon('scatter', 18)}Compare</h2>${cmp.r != null ? `<span class="strength s${Math.min(3, Math.floor(Math.abs(cmp.r) / 0.15))}">${H.strength(cmp.r)}</span>` : ''}</header>
             <div class="cmp-pickers">
-              <label class="pick"><span>Health</span><select data-field="cmp-x" aria-label="Health metric">${METRICS.map((x) => `<option value="${x.k}" ${x.k === xm.k ? 'selected' : ''}>${x.label}</option>`).join('')}</select></label>
+              <div class="pick"><span id="pick-x">Health</span><button class="pick-btn" data-act="pick" data-which="x" aria-haspopup="menu" aria-labelledby="pick-x pick-x-val"><span id="pick-x-val">${xm.label}</span>${E.icon('down', 15)}</button></div>
               <span class="vs">vs</span>
-              <label class="pick"><span>Productivity</span><select data-field="cmp-y" aria-label="Productivity measure">${PROD.map((x) => `<option value="${x.k}" ${x.k === pm.k ? 'selected' : ''}>${x.label}</option>`).join('')}</select></label>
+              <div class="pick"><span id="pick-y">Productivity</span><button class="pick-btn" data-act="pick" data-which="y" aria-haspopup="menu" aria-labelledby="pick-y pick-y-val"><span id="pick-y-val">${pm.label}</span>${E.icon('down', 15)}</button></div>
             </div>
             ${
               cmp.n >= 3
@@ -521,9 +609,9 @@
           ${
             recent.length
               ? `<div class="h-table-wrap"><table class="h-table">
-                  <thead><tr><th>Day</th>${METRICS.map((x) => `<th>${x.label}</th>`).join('')}</tr></thead>
+                  <thead><tr><th>Day</th>${MAIN.map((x) => `<th>${x.label}</th>`).join('')}</tr></thead>
                   <tbody>${recent
-                    .map((k) => `<tr data-act="edit" data-date="${k}" tabindex="0"><td>${E.relDay(k)}${s.health[k].src === 'manual' ? ' <span class="src">manual</span>' : ''}</td>${METRICS.map((x) => `<td>${H.val(k, x.k) == null ? '<span class="muted">—</span>' : x.fmt(H.val(k, x.k))}</td>`).join('')}</tr>`)
+                    .map((k) => `<tr data-act="edit" data-date="${k}" tabindex="0"><td>${E.relDay(k)}${s.health[k].src === 'manual' ? ' <span class="src">manual</span>' : ''}</td>${MAIN.map((x) => `<td>${H.val(k, x.k) == null ? '<span class="muted">—</span>' : x.fmt(H.val(k, x.k))}</td>`).join('')}</tr>`)
                     .join('')}</tbody></table></div>`
               : `<div class="card-empty">Nothing in the last 14 days.</div>`
           }
@@ -541,13 +629,22 @@
         V.st.x = el.dataset.value;
         E.app.render();
       },
-    },
-
-    onChange(el) {
-      if (el.dataset.field === 'cmp-x') V.st.x = el.value;
-      else if (el.dataset.field === 'cmp-y') V.st.y = el.value;
-      else return;
-      E.app.render();
+      pick(el) {
+        const which = el.dataset.which, list = which === 'x' ? METRICS : PROD;
+        ui.menu(
+          el,
+          list.map((o) => ({
+            label: o.label,
+            checked: o.k === V.st[which],
+            onClick: () => {
+              V.st[which] = o.k;
+              E.app.focusAfter(`.pick-btn[data-which="${which}"]`);
+              E.app.render();
+            },
+          })),
+          { align: 'left' }
+        );
+      },
     },
 
     onKey(el, e) {
