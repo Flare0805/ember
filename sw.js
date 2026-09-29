@@ -1,5 +1,5 @@
 /* Ember service worker — offline cache for the app shell (only active when served over http/https) */
-const CACHE = 'ember-v5';
+const CACHE = 'ember-v6';
 const SHELL = [
   './', './index.html', './css/app.css', './manifest.webmanifest',
   './assets/icon.svg', './assets/apple-touch-icon.png', './assets/icon-192.png', './assets/icon-512.png',
@@ -22,8 +22,9 @@ self.addEventListener('activate', (e) => {
 self.addEventListener('fetch', (e) => {
   const url = new URL(e.request.url);
   if (e.request.method !== 'GET' || url.origin !== location.origin) return;
+  // Always check with the server first (bypasses the browser's 10-minute cache), so updates show up at once
   e.respondWith(
-    fetch(e.request)
+    fetch(e.request.url, { cache: 'no-cache', credentials: 'same-origin' })
       .then((res) => {
         const copy = res.clone();
         caches.open(CACHE).then((c) => c.put(e.request, copy));
