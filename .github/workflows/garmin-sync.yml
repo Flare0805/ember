@@ -1,0 +1,70 @@
+# Downloads Garmin data a few times a day, encrypts it with your sync key and publishes the
+# ciphertext with the website. Needs the EMBER_SYNC_KEY and GARMIN_TOKENS secrets
+# (setup-cloud-sync.cmd on your PC saves them). Nothing readable is ever committed or logged.
+name: Garmin sync
+
+on:
+  schedule:
+    - cron: '0 5,7,9,13,19 * * *' # UTC: roughly 7, 9, 11, 15 and 21 o'clock in Prague
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: garmin-sync
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    outputs:
+      changed: ${{ steps.sync.outputs.changed }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install
+        run: pip install --quiet "garminconnect>=0.3,<0.4" cryptography
+
+      - name: Restore the newest Garmin login (encrypted)
+        uses: actions/cache/restore@v4
+        with:
+          path: .garmin-cache
+          key: garmin-login-${{ github.run_id }}
+          restore-keys: garmin-login-
+
+      - name: Download and encrypt
+        id: sync
+        env:
+          EMBER_SYNC_KEY: ${{ secrets.EMBER_SYNC_KEY }}
+          GARMIN_TOKENS: ${{ secrets.GARMIN_TOKENS }}
+          EMBER_TZ: Europe/Prague
+        run: python tools/cloud_sync.py
+
+      - name: Keep the newest Garmin login for next time (encrypted)
+        if: hashFiles('.garmin-cache/login.enc.json') != ''
+        uses: actions/cache/save@v4
+        with:
+          path: .garmin-cache
+          key: garmin-login-${{ github.run_id }}
+
+      - name: Commit the encrypted data
+        if: steps.sync.outputs.changed == 'true'
+        run: |
+          git config user.name "ember-sync"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/health.enc.json
+          git commit -q -m "Garmin sync (encrypted)"
+          git pull -q --rebase
+          git push -q
+
+  deploy:
+    needs: sync
+    if: needs.sync.outputs.changed == 'true'
+    uses: ./.github/workflows/pages.yml

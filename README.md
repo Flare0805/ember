@@ -19,6 +19,27 @@ Notes:
 - The phone and the PC each keep their own data. To move data between them, use Settings → **Export backup** (on iPhone this opens the share sheet: Save to Files, iCloud Drive or AirDrop), then **Import backup** on the other device.
 - iOS pauses the app when it's closed or the screen locks. The focus timer catches up when you come back, but it can't play the chime while the app is closed.
 
+## Today dashboard
+
+The start page follows your day. The phase switches automatically, and you can peek at the others:
+
+- **Morning** (until 11:00): last night's sleep with stages, Body Battery, resting HR and HRV, the weather, **today's top 3**, your **time-block plan**, a mood check-in and habits.
+- **Day** (11–18): **now & next** from your plan with a day bar and a focus button, your top 3, tasks, habits and weather.
+- **Evening** (from 18:00): **your day** in numbers, the **evening review** (three wins, mood, journal), habits left, and **tomorrow's top 3 and plan**.
+
+You can change the phase times and the weather location (your phone's location or a city) in Settings. Weather comes from [Open-Meteo](https://open-meteo.com) (free, no account). Only a rounded location is sent.
+
+## Automatic Garmin sync (cloud)
+
+A GitHub Actions job (`.github/workflows/garmin-sync.yml`) downloads your Garmin data about five times a day. It never uses your password, only your saved Garmin login, and it keeps that login **encrypted**. It then **encrypts all health data** with your personal sync key before publishing it as `data/health.enc.json`. The Ember app decrypts it on your phone when you open it.
+
+**One-time setup:**
+1. Make sure you have signed in once with `sync-garmin.cmd`.
+2. Double-click **`setup-cloud-sync.cmd`**. It saves two GitHub secrets (`EMBER_SYNC_KEY`, `GARMIN_TOKENS`) without showing them, starts the first sync and prints your **sync key**.
+3. On the iPhone: Ember → Settings → **Garmin sync** → enter the key once.
+
+If Garmin ever rejects the saved login, the job fails and GitHub emails you. Sign in with `sync-garmin.cmd` and run `setup-cloud-sync.cmd` again. Your key stays the same.
+
 ## Garmin (sleep, stress, Body Battery…)
 
 The **Health** page shows sleep, sleep score, stress, Body Battery, resting heart rate, HRV and steps. It compares them with your focus time, finished tasks, habits and mood.

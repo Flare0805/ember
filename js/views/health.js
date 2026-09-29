@@ -261,6 +261,150 @@
       return n;
     },
 
+    /* ----- automatic Garmin sync: the cloud job publishes encrypted data; this device decrypts it ----- */
+    cloud: {
+      KEY: 'ember:garmin-sync-key',
+      LAST: 'ember:garmin-sync-checked',
+      URL: 'data/health.enc.json',
+      busy: false,
+      key() {
+        try {
+          return localStorage.getItem(this.KEY) || '';
+        } catch (e) {
+          return '';
+        }
+      },
+      setKey(k) {
+        try {
+          if (k) localStorage.setItem(this.KEY, k.trim());
+          else {
+            localStorage.removeItem(this.KEY);
+            localStorage.removeItem(this.LAST);
+          }
+        } catch (e) { /* storage blocked: sync just stays off */ }
+      },
+      supported: () => !!(window.crypto && crypto.subtle && window.isSecureContext),
+      async decrypt(env, key) {
+        const bytes = (s) => Uint8Array.from(atob(s), (c) => c.charCodeAt(0));
+        const norm = key.toLowerCase().replace(/[^a-z0-9]/g, '');
+        const base = await crypto.subtle.importKey('raw', new TextEncoder().encode(norm), 'PBKDF2', false, ['deriveKey']);
+        const aes = await crypto.subtle.deriveKey({ name: 'PBKDF2', salt: bytes(env.salt), iterations: env.iter, hash: 'SHA-256' }, base, { name: 'AES-GCM', length: 256 }, false, ['decrypt']);
+        const plain = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: bytes(env.iv) }, aes, bytes(env.ct));
+        return JSON.parse(new TextDecoder().decode(plain));
+      },
+      /** Fetch + decrypt + merge. Returns {ok, changed, syncedAt} or {ok:false, error}. */
+      async pull({ force = false, key } = {}) {
+        key = key || this.key();
+        if (!key || this.busy) return { ok: false, error: key ? 'busy' : 'no-key' };
+        if (!this.supported()) return { ok: false, error: 'Automatic sync needs the app opened from its https address.' };
+        let last = 0;
+        try { last = +localStorage.getItem(this.LAST) || 0; } catch (e) { /* ignore */ }
+        if (!force && Date.now() - last < 15 * 60e3) return { ok: true, changed: 0, skipped: true };
+        this.busy = true;
+        try {
+          const res = await fetch(`${this.URL}?t=${Date.now()}`, { cache: 'no-store' });
+          if (res.status === 404) return { ok: false, error: 'No synced data yet. The first cloud sync may still be running.' };
+          if (!res.ok) return { ok: false, error: `Could not download the data (${res.status}).` };
+          let payload;
+          try {
+            payload = await this.decrypt(await res.json(), key);
+          } catch (e) {
+            return { ok: false, error: 'Wrong sync key: the data could not be decrypted.' };
+          }
+          let changed = 0;
+          E.commit((s) => {
+            Object.entries(payload.days || {}).forEach(([k, v]) => {
+              if (!/^\d{4}-\d{2}-\d{2}$/.test(k)) return;
+              const c = H.clean(v);
+              if (!Object.keys(c).length) return;
+              const old = s.health[k] || {};
+              const next = { ...old, ...c };
+              if (METRICS.concat(STAGES).some((m) => next[m.k] !== old[m.k])) {
+                s.health[k] = { ...next, src: 'garmin', at: Date.now() };
+                changed++;
+              }
+            });
+            s.settings.healthImportedAt = payload.syncedAt ? Date.parse(payload.syncedAt) : Date.now();
+          }, { silent: true });
+          try { localStorage.setItem(this.LAST, String(Date.now())); } catch (e) { /* ignore */ }
+          if (changed) E.app.render();
+          return { ok: true, changed, syncedAt: payload.syncedAt };
+        } catch (e) {
+          return { ok: false, error: 'You seem to be offline.' };
+        } finally {
+          this.busy = false;
+        }
+      },
+      /** Quiet background pull: on app start and when the app comes back to the foreground. */
+      async auto() {
+        const r = await this.pull();
+        if (r.ok && r.changed) ui.toast(`Garmin data updated (${E.plural(r.changed, 'day')})`, 'watch');
+      },
+    },
+
+    cloudSheet() {
+      const C = H.cloud;
+      const imported = E.db().settings.healthImportedAt;
+      const body = () => {
+        const has = !!C.key();
+        return `
+          <div class="cloud-status ${has ? 'on' : ''}">
+            <span class="cloud-ic">${E.icon(has ? 'check' : 'watch', 20)}</span>
+            <div><b>${has ? 'Automatic sync is on' : 'Automatic sync is off'}</b>
+              <span>${has ? (imported ? `Latest Garmin data: ${E.timeAgo(imported)}` : 'Waiting for the first sync…') : 'Enter your sync key to turn it on.'}</span></div>
+          </div>
+          ${
+            has
+              ? `<div class="help-actions"><button class="btn btn-primary" data-act="now">${E.icon('reset', 16)}Sync now</button><button class="btn btn-danger" data-act="off">Turn off on this device</button></div>`
+              : `<div class="form-label">Sync key</div>
+                 <input class="field-input key-input" data-f="key" placeholder="xxxx-xxxx-xxxx-xxxx-xxxx" autocomplete="off" autocapitalize="off" spellcheck="false" aria-label="Sync key">
+                 <div class="form-note">You get the key by running <code>setup-cloud-sync.cmd</code> on your PC once. It is stored only on this device.</div>
+                 <div class="help-actions"><button class="btn btn-primary" data-act="save">${E.icon('check', 16)}Turn on</button></div>`
+          }
+          <div class="cloud-msg" aria-live="polite"></div>
+          <p class="help-lead small-lead">GitHub downloads your Garmin data a few times a day (around 7, 9, 11, 15 and 21 o'clock), encrypts it with your key and publishes only the encrypted file. Ember decrypts it here when you open the app.</p>
+          <button class="btn btn-plain" data-act="manual">${E.icon('upload', 15)}Other ways: file import or logging by hand</button>`;
+      };
+      const msg = (api, text, bad) => {
+        const el = api.$('.cloud-msg');
+        el.textContent = text;
+        el.classList.toggle('bad', !!bad);
+      };
+      ui.sheet({
+        title: 'Garmin Sync',
+        size: 'sm',
+        hideDone: true,
+        cancel: 'Close',
+        body: body(),
+        actions: {
+          async save(el, e, api) {
+            const k = api.$('[data-f="key"]').value.trim();
+            if (k.replace(/[^a-z0-9]/gi, '').length < 12) return msg(api, 'That key looks too short.', true);
+            msg(api, 'Checking the key…');
+            const r = await C.pull({ force: true, key: k });
+            if (!r.ok && /Wrong sync key|could not be decrypted/.test(r.error)) return msg(api, r.error, true);
+            C.setKey(k);
+            api.setBody(body());
+            msg(api, r.ok ? (r.changed ? `Done: ${E.plural(r.changed, 'day')} of Garmin data added.` : 'Done: you are up to date.') : r.error, !r.ok);
+          },
+          async now(el, e, api) {
+            msg(api, 'Syncing…');
+            const r = await C.pull({ force: true });
+            api.setBody(body());
+            msg(api, r.ok ? (r.changed ? `${E.plural(r.changed, 'day')} updated.` : 'Already up to date.') : r.error, !r.ok);
+          },
+          off(el, e, api) {
+            C.setKey('');
+            api.setBody(body());
+          },
+          manual(el, e, api) {
+            api.close();
+            setTimeout(() => H.helpSheet(), 250);
+          },
+        },
+      });
+    },
+
     pickFile() {
       const inp = document.createElement('input');
       inp.type = 'file';
@@ -367,7 +511,7 @@
         hideDone: true,
         cancel: 'Close',
         body: `
-          <p class="help-lead">Garmin doesn't offer a public connection for personal apps, so there are two ways to get your watch data into Ember:</p>
+          <p class="help-lead">Besides the <b>automatic cloud sync</b> (Settings › Garmin sync), there are two manual ways to get your watch data into Ember:</p>
           <div class="help-step"><span class="help-n">1</span><div><b>Log by hand (any device)</b>
             <p>Each morning open Garmin Connect and type sleep, stress, Body Battery and so on into <b>Log</b>. It takes about 20 seconds.</p></div></div>
           <div class="help-step"><span class="help-n">2</span><div><b>Automatic download (Windows PC)</b>
@@ -443,13 +587,13 @@
   const hasStages = (d) => !!d && STAGES.some((st) => typeof d[st.k] === 'number');
 
   /** Last night as one horizontal bar split into stages, with a legend that also labels the 30-day chart. */
-  function lastNight(k) {
+  function lastNight(k, label) {
     const d = E.db().health[k];
     const parts = STAGES.map((st) => ({ ...st, v: d[st.k] || 0 }));
     const total = parts.reduce((a, p) => a + p.v, 0) || 1;
     const pct = (v) => Math.round((v / total) * 100);
     return `<div class="ln">
-      <div class="ln-head"><span>${k === E.today() ? 'Last night' : `Night before ${E.relDay(k).toLowerCase()}`}</span>
+      <div class="ln-head"><span>${label || (k === E.today() ? 'Last night' : `Night before ${E.relDay(k).toLowerCase()}`)}</span>
         <span><b>${hm(d.sleep != null ? d.sleep : total - (d.awake || 0))}</b> asleep${d.sleepScore ? ` · score <b>${d.sleepScore}</b>` : ''}</span></div>
       <div class="ln-bar" role="img" aria-label="${esc(parts.map((p) => `${p.label} ${hm(p.v)}`).join(', '))}">${parts
         .filter((p) => p.v > 0)
@@ -487,6 +631,8 @@
       .join('');
     return `<div class="bars dense stacked" style="--h:160px"><div class="bars-grid">${grid}</div><div class="bars-cols">${cols}</div></div>`;
   }
+
+  H.lastNightHtml = lastNight;
 
   function sleepCard(avg30) {
     const T = E.today(), s = E.db().health;
@@ -621,7 +767,7 @@
 
     actions: {
       new: () => H.logSheet(),
-      help: () => H.helpSheet(),
+      help: () => H.cloudSheet(),
       import: () => H.pickFile(),
       edit: (el) => H.logSheet(el.dataset.date),
       metric(el) {

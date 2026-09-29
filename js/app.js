@@ -179,7 +179,8 @@
     let focusSel = pendingFocus, selStart = null, selEnd = null;
     pendingFocus = null;
     const ae = document.activeElement;
-    if (!focusSel && ae && view.contains(ae) && ae.dataset && ae.dataset.field) focusSel = `[data-field="${ae.dataset.field}"]`;
+    if (!focusSel && ae && view.contains(ae) && ae.dataset && ae.dataset.field)
+      focusSel = `[data-field="${ae.dataset.field}"]${ae.dataset.date ? `[data-date="${ae.dataset.date}"]` : ''}${ae.dataset.i != null ? `[data-i="${ae.dataset.i}"]` : ''}`;
     if (ae && ae.dataset && focusSel && ae.matches && ae.matches(focusSel) && 'selectionStart' in ae) {
       try {
         selStart = ae.selectionStart;
@@ -307,14 +308,24 @@
       }
     }, 150));
 
+    const typing = () => {
+      const a = document.activeElement;
+      return a && /INPUT|TEXTAREA/.test(a.tagName) && view.contains(a);
+    };
     const dayCheck = () => {
       if (E.today() !== lastDay) {
         lastDay = E.today();
         app.render();
+      } else if (current && current.view === 'today' && E.views.today.stale() && !typing() && !$('#overlay-root').children.length) {
+        app.render(); // keeps the dashboard's phase and "now" current
       }
     };
     setInterval(dayCheck, 60000);
-    document.addEventListener('visibilitychange', () => !document.hidden && dayCheck());
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden) return;
+      dayCheck();
+      E.health.cloud.auto();
+    });
   }
 
   /* ---------- onboarding ---------- */
@@ -368,6 +379,7 @@
     E.focus.init();
     route();
     if (!E.db().settings.onboarded) onboarding();
+    setTimeout(() => E.health.cloud.auto(), 800); // pull the latest Garmin data in the background
     if (/^https?:/.test(location.protocol)) {
       const l = document.createElement('link');
       l.rel = 'manifest';

@@ -44,7 +44,14 @@
             ${row('calendar', '#FF453A', 'Week starts on', ui.seg('weekstart', [{ value: '1', label: 'Monday' }, { value: '0', label: 'Sunday' }], String(st.weekStart), 'small'))}
             ${row('books', '#FF9F0A', 'Yearly reading goal', ui.stepper('reading', st.readingGoal, ' books'))}
             ${row('focus', '#FF5E3A', 'Focus timer', `<span class="muted">${st.focus.work} / ${st.focus.short} / ${st.focus.long} min</span>${E.icon('right', 16)}`, 'data-act="focus-settings" role="button" tabindex="0"')}
-            ${row('watch', '#FF375F', 'Garmin sync', `<span class="muted">${st.healthImportedAt ? `imported ${E.timeAgo(st.healthImportedAt)}` : 'not set up'}</span>${E.icon('right', 16)}`, 'data-act="garmin" role="button" tabindex="0"')}
+            ${row('watch', '#FF375F', 'Garmin sync', `<span class="muted">${E.health.cloud.key() ? 'automatic' : st.healthImportedAt ? `imported ${E.timeAgo(st.healthImportedAt)}` : 'off'}</span>${E.icon('right', 16)}`, 'data-act="garmin" role="button" tabindex="0"')}
+          </section>
+
+          <div class="set-label">Today dashboard</div>
+          <section class="set-group">
+            ${row('today', '#FF9F0A', 'Morning ends at', ui.stepper('morning-end', `${st.phases.morningEnd}:00`))}
+            ${row('moon', '#5E5CE6', 'Evening starts at', ui.stepper('evening-start', `${st.phases.eveningStart}:00`))}
+            ${row('today', '#64D2FF', 'Weather', `<span class="muted">${st.weather.mode === 'city' && st.weather.city ? esc(st.weather.city.name) : 'Current location'}</span>${E.icon('right', 16)}`, 'data-act="weather" role="button" tabindex="0"')}
           </section>
 
           <div class="set-label">Your data</div>
@@ -82,7 +89,18 @@
       weekstart: (el) => E.commit((s) => (s.settings.weekStart = +el.dataset.value)),
       reading: (el) => E.commit((s) => (s.settings.readingGoal = E.clamp(s.settings.readingGoal + +el.dataset.delta, 1, 365))),
       'focus-settings': () => E.views.focus.settingsSheet(),
-      garmin: () => E.health.helpSheet(),
+      garmin: () => E.health.cloudSheet(),
+      'morning-end': (el) =>
+        E.commit((s) => {
+          const p = s.settings.phases;
+          p.morningEnd = E.clamp(p.morningEnd + +el.dataset.delta, 7, Math.min(14, p.eveningStart - 1));
+        }),
+      'evening-start': (el) =>
+        E.commit((s) => {
+          const p = s.settings.phases;
+          p.eveningStart = E.clamp(p.eveningStart + +el.dataset.delta, Math.max(15, p.morningEnd + 1), 23);
+        }),
+      weather: () => V.citySheet(),
       async export() {
         const name = `ember-backup-${E.today()}.json`, json = E.store.exportData();
         const done = () => {
@@ -120,6 +138,66 @@
         E.app.render();
         ui.toast('All data erased', 'trash');
       },
+    },
+
+    /** Weather location: this phone's location or a fixed city (Open-Meteo search). */
+    citySheet() {
+      const W = E.weather, st = E.db().settings.weather;
+      let results = [];
+      const check = (on) => (on ? `<span class="pick-check">${E.icon('check', 17)}</span>` : '');
+      const body = () => `
+        <div class="form-group list-group-inset">
+          <button class="form-row as-btn" data-act="use-geo"><span class="form-row-title">${E.icon('today', 16)} Current location</span>${check(st.mode !== 'city')}</button>
+          ${st.city ? `<button class="form-row as-btn" data-act="use-city"><span class="form-row-title">${E.icon('calendar', 16)} ${esc(st.city.name)}</span>${check(st.mode === 'city')}</button>` : ''}
+        </div>
+        <label class="search-field big">${E.icon('search', 18)}<input type="search" data-f="q" placeholder="Search for a city" autocomplete="off" aria-label="Search for a city"></label>
+        <div class="ol-results city-results"></div>
+        <p class="form-note">Weather comes from Open-Meteo (free, no account). With “Current location” only a rounded position (about 1 km) is sent.</p>`;
+      const search = E.debounce(async (q, api) => {
+        const box = api.$('.city-results');
+        if (q.length < 2) return (box.innerHTML = '');
+        try {
+          results = await W.searchCity(q);
+          box.innerHTML = results.length
+            ? results.map((r, i) => `<button class="ol-item" data-act="pick" data-i="${i}"><span class="city-pin">${E.icon('today', 16)}</span><div class="row-main"><div class="row-title">${esc(r.name)}</div><div class="row-sub">${esc(r.region)}</div></div></button>`).join('')
+            : '<div class="ol-msg">No places found.</div>';
+        } catch (e) {
+          box.innerHTML = '<div class="ol-msg">Could not search right now (offline?).</div>';
+        }
+      }, 350);
+      const apply = async (api) => {
+        E.commit(null, { silent: true });
+        api.close();
+        await W.refresh();
+        E.app.render();
+      };
+      ui.sheet({
+        title: 'Weather Location',
+        size: 'sm',
+        hideDone: true,
+        cancel: 'Close',
+        body: body(),
+        onInput(el, e, api) {
+          if (el.dataset.f === 'q') search(el.value.trim(), api);
+        },
+        actions: {
+          async 'use-geo'(el, e, api) {
+            const r = await W.locate();
+            if (!r.ok) return ui.toast(r.error, 'info');
+            st.mode = 'geo';
+            apply(api);
+          },
+          'use-city'(el, e, api) {
+            st.mode = 'city';
+            apply(api);
+          },
+          pick(el, e, api) {
+            st.city = results[+el.dataset.i];
+            st.mode = 'city';
+            apply(api);
+          },
+        },
+      });
     },
 
     onInput(el) {

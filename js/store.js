@@ -15,7 +15,10 @@
       onboarded: false,
       showDoneTasks: false,
       focus: { work: 25, short: 5, long: 15, every: 4, sound: true, autoBreak: false },
+      phases: { morningEnd: 11, eveningStart: 18 },
+      weather: { mode: 'geo', city: null },
     },
+    days: {}, // { 'YYYY-MM-DD': { top3: [{text, done}], blocks: [{id, start, end, title, color}], wins: [] } }
     journal: [],
     goals: [],
     habits: [],
@@ -37,6 +40,9 @@
     for (const k of ['journal', 'goals', 'habits', 'books', 'lists', 'tasks']) if (!Array.isArray(out[k])) out[k] = base[k];
     if (!out.lists.length) out.lists = base.lists;
     if (!out.health || typeof out.health !== 'object' || Array.isArray(out.health)) out.health = {};
+    if (!out.days || typeof out.days !== 'object' || Array.isArray(out.days)) out.days = {};
+    out.settings.phases = { ...base.settings.phases, ...(out.settings.phases || {}) };
+    out.settings.weather = { ...base.settings.weather, ...(out.settings.weather || {}) };
     return out;
   }
 
@@ -206,6 +212,35 @@
       (a.due || '9999') < (b.due || '9999') ? -1 : (a.due || '9999') > (b.due || '9999') ? 1 : (b.priority || 0) - (a.priority || 0) || a.createdAt - b.createdAt,
   };
 
+  /* ---------- day plan: top 3, time blocks, evening wins ---------- */
+  E.day = {
+    get(k, create) {
+      const s = E.db();
+      let d = s.days[k];
+      if (!d && create) d = s.days[k] = { top3: [], blocks: [], wins: [] };
+      return d || { top3: [], blocks: [], wins: [] };
+    },
+    top3(k) {
+      const t = (E.day.get(k).top3 || []).slice(0, 3);
+      while (t.length < 3) t.push({ text: '', done: false });
+      return t;
+    },
+    blocks: (k) => (E.day.get(k).blocks || []).slice().sort((a, b) => a.start.localeCompare(b.start)),
+    /** 'morning' | 'day' | 'evening' for a given time */
+    phase(d = new Date()) {
+      const p = E.db().settings.phases, h = d.getHours() + d.getMinutes() / 60;
+      return h < p.morningEnd && h >= 4 ? 'morning' : h >= p.eveningStart || h < 4 ? 'evening' : 'day';
+    },
+    mins: (hhmm) => {
+      const [h, m] = String(hhmm).split(':').map(Number);
+      return h * 60 + (m || 0);
+    },
+    nowMins: () => {
+      const d = new Date();
+      return d.getHours() * 60 + d.getMinutes();
+    },
+  };
+
   /* ---------- focus ---------- */
   E.focusStats = {
     minutesOn: (k) => E.db().focus.sessions.filter((s) => E.dkey(new Date(s.start)) === k).reduce((a, s) => a + s.minutes, 0),
@@ -358,6 +393,25 @@
       const n = d === 0 ? 2 : Math.round(clamp((hd(ago(d)).sleep - 330) / 45 + gauss() * 0.9, 0, 6));
       for (let i = 0; i < n; i++) s.focus.sessions.push({ id: E.uid(), start: ts(ago(d), 9 + i * 2, 0), minutes: 25, label: labels[Math.floor(rnd() * labels.length)] });
     }
+
+    // Day plan: today's priorities and time blocks, yesterday's review
+    const blk = (start, end, title, color) => ({ id: E.uid(), start, end, title, color });
+    s.days = {
+      [T]: {
+        top3: [{ text: 'Finish the project draft', done: true }, { text: '30 min of Spanish', done: false }, { text: 'Call the dentist', done: false }],
+        blocks: [
+          blk('07:00', '07:30', 'Morning run', '#30D158'), blk('09:00', '11:30', 'Deep work: project', '#FF9F0A'),
+          blk('12:00', '13:00', 'Lunch', '#8E8E93'), blk('14:00', '15:30', 'Meetings', '#0A84FF'),
+          blk('17:30', '18:30', 'Gym', '#FF453A'), blk('21:30', '22:00', 'Read & journal', '#BF5AF2'),
+        ],
+        wins: [],
+      },
+      [ago(1)]: {
+        top3: [{ text: 'Send the report', done: true }, { text: 'Workout', done: true }, { text: 'Plan the weekend', done: false }],
+        blocks: [blk('09:00', '12:00', 'Deep work', '#FF9F0A'), blk('13:00', '14:00', 'Lunch', '#8E8E93'), blk('18:00', '19:00', 'Workout', '#FF453A')],
+        wins: ['Sent the report on time', 'Great workout', ''],
+      },
+    };
 
     store.state = s;
     store.saveNow();
