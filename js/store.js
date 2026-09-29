@@ -163,8 +163,18 @@
 
   /* ---------- goals ---------- */
   E.goal = {
+    /** Amount goals (savings, km, pages…): total of all entries */
+    saved: (g) => (g.entries || []).reduce((a, x) => a + (+x.amount || 0), 0),
+    amt: (g, v) => `${(Math.round(v * 100) / 100).toLocaleString('cs-CZ')}${g.unit ? ` ${g.unit}` : ''}`,
+    /** How much per month is still needed to hit the deadline (null without a deadline) */
+    pace(g) {
+      const left = (g.target || 0) - E.goal.saved(g), days = g.deadline ? E.diffDays(g.deadline, E.today()) : null;
+      if (left <= 0 || days == null) return null;
+      return days <= 0 ? { perMonth: left, late: true } : { perMonth: left / Math.max(days / 30.44, 1 / 30.44) };
+    },
     progress(g) {
       if (g.status === 'done') return 100;
+      if (g.kind === 'amount') return g.target > 0 ? E.clamp(Math.floor((E.goal.saved(g) / g.target) * 100), 0, 100) : 0;
       if (g.milestones && g.milestones.length) return Math.round((g.milestones.filter((m) => m.done).length / g.milestones.length) * 100);
       return g.progress || 0;
     },

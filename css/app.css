@@ -1372,3 +1372,34 @@ textarea.field-input { margin-top: 10px; line-height: 1.5; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: 0.01ms !important; animation-delay: 0ms !important; transition-duration: 0.01ms !important; }
 }
+
+/* ---------- Amount goals (savings etc.) ---------- */
+.gc-amt { display: flex; align-items: baseline; gap: 6px; margin-top: 10px; flex-wrap: wrap; }
+.gc-amt b { font-size: 18px; font-weight: 720; font-variant-numeric: tabular-nums; letter-spacing: -0.01em; }
+.gc-amt span { font-size: 12.5px; color: var(--text-2); }
+.goal-card .gc-amt + .pbar { margin-top: 6px; }
+.gc-add { margin-left: auto; display: inline-flex; align-items: center; gap: 3px; height: 28px; padding: 0 10px; border-radius: 999px; background: var(--accent-soft); color: var(--accent); font-size: 12.5px; font-weight: 650; }
+.gc-add:hover { background: color-mix(in srgb, var(--accent) 24%, transparent); }
+.amt-sum { background: var(--card-2); border-radius: 14px; padding: 12px 14px; margin: 10px 0 4px; }
+.amt-top { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.amt-top b { font-size: 22px; font-weight: 750; font-variant-numeric: tabular-nums; }
+.amt-top span { font-size: 13px; color: var(--text-2); }
+.amt-sum .form-note { margin: 6px 0 0; }
+.form-note.ok { color: var(--green); }
+.amt-add { display: grid; grid-template-columns: 1fr 1.3fr auto; gap: 8px; align-items: center; }
+.amt-add .field-input { margin: 0; }
+.amt-row { gap: 10px; }
+.amt-date { font-size: 12.5px; color: var(--text-2); width: 52px; flex-shrink: 0; }
+.amt-note { flex: 1; min-width: 0; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.amt-row b { font-variant-numeric: tabular-nums; font-size: 14.5px; white-space: nowrap; color: var(--green); }
+.amt-row b.danger { color: var(--red); }
+.amt-big { display: flex; align-items: baseline; justify-content: center; gap: 8px; margin: 10px 0 14px; }
+.amt-big input { width: 190px; font-size: 44px; font-weight: 750; text-align: right; background: transparent; border: 0; border-bottom: 2px solid var(--accent); outline: 0; font-variant-numeric: tabular-nums; -moz-appearance: textfield; }
+.amt-big input::-webkit-inner-spin-button { display: none; }
+.amt-big span { font-size: 20px; color: var(--text-2); }
+.chips-row.center { justify-content: center; margin-bottom: 14px; }
+.more-update { margin-top: 16px !important; }
+@media (max-width: 520px) {
+  .amt-add { grid-template-columns: 1fr auto; }
+  .amt-add [data-f="amt-note"] { grid-column: 1 / -1; grid-row: 2; }
+}

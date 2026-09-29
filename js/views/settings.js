@@ -54,6 +54,11 @@
             ${row('today', '#64D2FF', 'Weather', `<span class="muted">${st.weather.mode === 'city' && st.weather.city ? esc(st.weather.city.name) : 'Current location'}</span>${E.icon('right', 16)}`, 'data-act="weather" role="button" tabindex="0"')}
           </section>
 
+          <div class="set-label">App</div>
+          <section class="set-group">
+            ${row('reset', '#30D158', 'Update app', `<span class="muted">v${E.app.VERSION}</span>${E.icon('right', 16)}`, 'data-act="update" role="button" tabindex="0"')}
+          </section>
+
           <div class="set-label">Your data</div>
           <section class="set-group">
             <div class="set-note ${needsBackup ? 'warn' : ''}">
@@ -90,6 +95,7 @@
       reading: (el) => E.commit((s) => (s.settings.readingGoal = E.clamp(s.settings.readingGoal + +el.dataset.delta, 1, 365))),
       'focus-settings': () => E.views.focus.settingsSheet(),
       garmin: () => E.health.cloudSheet(),
+      update: () => E.app.update(),
       'morning-end': (el) =>
         E.commit((s) => {
           const p = s.settings.phases;
@@ -254,8 +260,11 @@
         <section class="set-group">
           ${items.map(([href, icon, c, label, sub]) => `<a class="set-row" href="${href}"><span class="set-ic" style="--c:${c}">${E.icon(icon, 16)}</span><span class="set-title">${label}</span><span class="set-right"><span class="muted">${sub}</span>${E.icon('right', 16)}</span></a>`).join('')}
         </section>
+        <section class="set-group more-update">
+          <div class="set-row" data-act="update" role="button" tabindex="0"><span class="set-ic" style="--c:#30D158">${E.icon('reset', 16)}</span><span class="set-title">Update app</span><span class="set-right"><span class="muted">v${E.app.VERSION}</span>${E.icon('right', 16)}</span></div>
+        </section>
       </div>`;
     },
-    actions: { spotlight: () => E.spotlight.open() },
+    actions: { spotlight: () => E.spotlight.open(), update: () => E.app.update() },
   };
 })();

@@ -372,7 +372,7 @@
             return `<button class="row goal-row" data-act="goal-open" data-id="${g.id}">
               <span class="emoji-badge" style="--c:${E.cat(g.category).color}">${g.emoji}</span>
               <div class="row-main"><div class="row-title">${esc(g.title)}</div>${ui.progress(p, E.cat(g.category).color)}
-              <div class="row-sub">${Math.round(p * 100)}%${dl != null ? ` · ${dl < 0 ? `<span class="danger">${-dl} days overdue</span>` : `${E.plural(dl, 'day')} left`}` : ''}</div></div>
+              <div class="row-sub">${g.kind === 'amount' ? `${E.goal.amt(g, E.goal.saved(g))} of ${E.goal.amt(g, g.target || 0)} · ` : ''}${Math.round(p * 100)}%${dl != null ? ` · ${dl < 0 ? `<span class="danger">${-dl} days overdue</span>` : `${E.plural(dl, 'day')} left`}` : ''}</div></div>
             </button>`;
           })
           .join('')}</div>

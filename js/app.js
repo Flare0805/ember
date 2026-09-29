@@ -32,6 +32,20 @@
   app.wide = () => window.innerWidth >= 1040;
   app.focusAfter = (sel) => (pendingFocus = sel);
   app.current = () => current;
+  app.VERSION = '1.4 · 29 Sep 2026';
+  /** Throw away the cached app files, fetch the newest version and restart. Your data is not touched. */
+  app.update = async () => {
+    ui.toast('Updating to the newest version…', 'reset');
+    try {
+      const reg = navigator.serviceWorker && (await navigator.serviceWorker.getRegistration());
+      if (reg) await reg.update();
+    } catch (e) { /* offline or no service worker */ }
+    try {
+      if (window.caches) for (const k of await caches.keys()) await caches.delete(k);
+    } catch (e) { /* ignore */ }
+    E.store.saveNow();
+    setTimeout(() => location.reload(), 400);
+  };
   /** Navigate and render right away instead of waiting for the async hashchange event. */
   app.go = (hash) => {
     if (location.hash !== hash) location.hash = hash;
