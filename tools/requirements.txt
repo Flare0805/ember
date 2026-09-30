@@ -1,0 +1,3 @@
+# Exact versions for the cloud sync job. Dependabot (.github/dependabot.yml) proposes updates.
+garminconnect==0.3.17
+cryptography==50.0.2

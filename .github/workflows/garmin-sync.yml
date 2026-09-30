@@ -1,6 +1,10 @@
 # Downloads Garmin data a few times a day, encrypts it with your sync key and publishes the
 # ciphertext with the website. Needs the EMBER_SYNC_KEY and GARMIN_TOKENS secrets
 # (setup-cloud-sync.cmd on your PC saves them). Nothing readable is ever committed or logged.
+#
+# The sync job runs third-party Python code next to those secrets, so it gets the smallest possible
+# footprint: actions pinned to commit SHAs, exact package versions, no persisted git credentials
+# (the push token only exists inside the commit step) and no Pages permissions.
 name: Garmin sync
 
 on:
@@ -8,10 +12,7 @@ on:
     - cron: '0 5,7,9,13,19 * * *' # UTC: roughly 7, 9, 11, 15 and 21 o'clock in Prague
   workflow_dispatch:
 
-permissions:
-  contents: write
-  pages: write
-  id-token: write
+permissions: {}
 
 concurrency:
   group: garmin-sync
@@ -20,20 +21,24 @@ concurrency:
 jobs:
   sync:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     outputs:
       changed: ${{ steps.sync.outputs.changed }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
         with:
           python-version: '3.12'
 
       - name: Install
-        run: pip install --quiet "garminconnect>=0.3,<0.4" cryptography
+        run: pip install --quiet -r tools/requirements.txt
 
       - name: Restore the newest Garmin login (encrypted)
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
           path: .garmin-cache
           key: garmin-login-${{ github.run_id }}
@@ -49,22 +54,28 @@ jobs:
 
       - name: Keep the newest Garmin login for next time (encrypted)
         if: hashFiles('.garmin-cache/login.enc.json') != ''
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
           path: .garmin-cache
           key: garmin-login-${{ github.run_id }}
 
       - name: Commit the encrypted data
         if: steps.sync.outputs.changed == 'true'
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
         run: |
           git config user.name "ember-sync"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add data/health.enc.json
           git commit -q -m "Garmin sync (encrypted)"
           git pull -q --rebase
-          git push -q
+          git push -q "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" HEAD:main
 
   deploy:
     needs: sync
     if: needs.sync.outputs.changed == 'true'
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
     uses: ./.github/workflows/pages.yml
