@@ -58,8 +58,9 @@ def main():
             sys.exit(f"Could not save the {name} secret: {r.stderr.strip()}")
         print(f"  saved GitHub secret {name}")
 
-    # The cloud now owns this Garmin login. Move the PC copy aside so the two never renew the same one.
-    TOKEN_FILE.replace(TOKEN_FILE.with_name("garmin_tokens.moved-to-cloud.json"))
+    # The cloud now owns this Garmin login. Remove the PC copy so the two never renew the same one
+    # (and so no plaintext token file lingers on disk).
+    TOKEN_FILE.unlink()
     print("  this PC's Garmin login now lives in the cloud (sync-garmin.cmd will ask you to sign in if you use it)")
 
     r = run(["gh", "workflow", "run", "garmin-sync.yml", "--repo", repo])

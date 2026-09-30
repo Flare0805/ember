@@ -1,5 +1,6 @@
 ﻿.claude/
 # Personal health data and the local Python environment never go to GitHub
 garmin-export/
+.garmin-cache/
 .venv-garmin/
 __pycache__/
