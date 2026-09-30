@@ -60,7 +60,7 @@
       const cat = E.cat(g.category), p = E.goal.progress(g);
       const ms = g.milestones || [];
       return `<article class="goal-card ${g.status}" draggable="true" data-id="${g.id}" data-act="open" tabindex="0" style="--c:${cat.color}">
-        <div class="gc-top"><span class="gc-emoji">${g.emoji}</span><span class="gc-cat">${cat.label}</span>${g.status === 'done' ? `<span class="gc-trophy">${E.icon('trophy', 15)}</span>` : ''}</div>
+        <div class="gc-top"><span class="gc-emoji">${esc(g.emoji)}</span><span class="gc-cat">${cat.label}</span>${g.status === 'done' ? `<span class="gc-trophy">${E.icon('trophy', 15)}</span>` : ''}</div>
         <div class="gc-title">${esc(g.title)}</div>
         ${g.description ? `<div class="gc-desc">${esc(g.description)}</div>` : ''}
         ${

@@ -77,7 +77,7 @@
                 .map((it) => {
                   const i = flat.push(it) - 1;
                   return `<button class="spot-item" data-i="${i}" role="option">
-                    <span class="spot-ic">${it.emoji ? it.emoji : E.icon(it.icon || 'right', 17)}</span>
+                    <span class="spot-ic">${it.emoji ? esc(it.emoji) : E.icon(it.icon || 'right', 17)}</span>
                     <span class="spot-txt"><span class="spot-title">${hl(it.title, q)}</span><span class="spot-sub">${hl(it.sub || '', q)}</span></span>
                   </button>`;
                 })

@@ -286,7 +286,7 @@
             .map((h) => {
               const c = E.habit.count(h, T), st = E.habit.streak(h);
               return `<div class="row">
-                <span class="emoji-badge" style="--c:${h.color}">${h.emoji}</span>
+                <span class="emoji-badge" style="--c:${h.color}">${esc(h.emoji)}</span>
                 <div class="row-main"><div class="row-title">${esc(h.name)}</div>
                   <div class="row-sub">${h.target > 1 ? `${c} of ${h.target}` : E.habit.done(h, T) ? 'Done' : 'Not done yet'}${st ? ` · <span class="streak">${E.icon('flame', 12)}${st}</span>` : ''}</div></div>
                 ${ui.habitCell(h, T, { size: 38 })}
@@ -370,7 +370,7 @@
           .map((g) => {
             const p = E.goal.progress(g) / 100, dl = E.goal.daysLeft(g);
             return `<button class="row goal-row" data-act="goal-open" data-id="${g.id}">
-              <span class="emoji-badge" style="--c:${E.cat(g.category).color}">${g.emoji}</span>
+              <span class="emoji-badge" style="--c:${E.cat(g.category).color}">${esc(g.emoji)}</span>
               <div class="row-main"><div class="row-title">${esc(g.title)}</div>${ui.progress(p, E.cat(g.category).color)}
               <div class="row-sub">${g.kind === 'amount' ? `${E.goal.amt(g, E.goal.saved(g))} of ${E.goal.amt(g, g.target || 0)} · ` : ''}${Math.round(p * 100)}%${dl != null ? ` · ${dl < 0 ? `<span class="danger">${-dl} days overdue</span>` : `${E.plural(dl, 'day')} left`}` : ''}</div></div>
             </button>`;

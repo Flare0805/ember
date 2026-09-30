@@ -43,7 +43,67 @@
     if (!out.days || typeof out.days !== 'object' || Array.isArray(out.days)) out.days = {};
     out.settings.phases = { ...base.settings.phases, ...(out.settings.phases || {}) };
     out.settings.weather = { ...base.settings.weather, ...(out.settings.weather || {}) };
+    return sanitize(out);
+  }
+
+  /* ---------- sanitizing (backups and localStorage are untrusted input) ----------
+     The renderers put ids, colors, emoji, statuses and day keys straight into HTML attributes and class names,
+     so every value that is not free text is forced back into the shape the UI itself would have produced. */
+  const ID_RE = /^[A-Za-z0-9_-]{1,40}$/, DAY_RE = /^\d{4}-\d{2}-\d{2}$/, HEX_RE = /^#[0-9A-Fa-f]{3,8}$/, TIME_RE = /^\d{1,2}:\d{2}$/;
+  const EMOJI_RE = /^[\p{Extended_Pictographic}\p{Emoji_Component}‍]{1,16}$/u;
+  const isObj = (v) => !!v && typeof v === 'object' && !Array.isArray(v);
+  const str = (v, max = 5000) => (v == null ? '' : String(v).slice(0, max));
+  const num = (v, fb = 0) => (typeof v === 'number' && isFinite(v) ? v : fb);
+  const oneOf = (v, list, fb = list[0]) => (list.includes(v) ? v : fb);
+  const id = (v) => (typeof v === 'string' && ID_RE.test(v) ? v : E.uid());
+  const day = (v, fb = null) => (typeof v === 'string' && DAY_RE.test(v) ? v : fb);
+  const color = (v, fb = E.COLORS[0]) => (typeof v === 'string' && HEX_RE.test(v) ? v : fb);
+  const emoji = (v, fb) => (typeof v === 'string' && EMOJI_RE.test(v) ? v : fb);
+  const url = (v) => (typeof v === 'string' && /^(https?:\/\/|data:image\/)/i.test(v) ? v.slice(0, 2000) : '');
+  const list = (v, fn) => (Array.isArray(v) ? v.filter(isObj).map(fn) : []);
+  const strings = (v, max = 200) => (Array.isArray(v) ? v.filter((x) => typeof x === 'string').map((x) => x.slice(0, max)) : []);
+  const byDay = (v, fn) => {
+    const out = {};
+    if (isObj(v)) for (const k of Object.keys(v)) if (DAY_RE.test(k)) out[k] = fn(v[k]);
     return out;
+  };
+
+  function sanitize(s) {
+    s.settings.name = str(s.settings.name, 60);
+    s.habits = list(s.habits, (h) => ({
+      ...h, id: id(h.id), name: str(h.name, 200), emoji: emoji(h.emoji, '⭐'), color: color(h.color),
+      days: Array.isArray(h.days) ? h.days.map(Number).filter((d) => d >= 0 && d <= 6) : [0, 1, 2, 3, 4, 5, 6],
+      target: Math.max(1, Math.round(num(h.target, 1))), log: byDay(h.log, (v) => Math.max(0, Math.round(num(v)))), start: day(h.start, E.today()),
+    }));
+    s.goals = list(s.goals, (g) => ({
+      ...g, id: id(g.id), title: str(g.title, 200), description: str(g.description), emoji: emoji(g.emoji, E.cat(g.category).emoji),
+      status: oneOf(g.status, ['planned', 'active', 'done']), deadline: day(g.deadline), unit: str(g.unit, 12).replace(/[<>&"']/g, ''),
+      milestones: list(g.milestones, (m) => ({ ...m, id: id(m.id), title: str(m.title, 200), done: !!m.done })),
+      entries: list(g.entries, (x) => ({ ...x, id: id(x.id), note: str(x.note, 200), amount: num(x.amount), date: day(x.date, E.today()) })),
+    }));
+    s.books = list(s.books, (b) => ({
+      ...b, id: id(b.id), title: str(b.title, 300), author: str(b.author, 200), notes: str(b.notes), cover: url(b.cover),
+      status: oneOf(b.status, ['want', 'reading', 'finished']), finishedAt: day(b.finishedAt), startedAt: day(b.startedAt), quotes: strings(b.quotes, 1000),
+    }));
+    s.lists = list(s.lists, (l) => ({ ...l, id: id(l.id), name: str(l.name, 100), color: color(l.color) }));
+    if (!s.lists.length) s.lists = defaults().lists;
+    s.tasks = list(s.tasks, (t) => ({ ...t, id: id(t.id), title: str(t.title, 500), notes: str(t.notes), listId: str(t.listId, 40), due: day(t.due) }));
+    s.journal = list(s.journal, (j) => ({ ...j, id: id(j.id), date: day(j.date, E.today()), title: str(j.title, 300), body: str(j.body, 100000), tags: strings(j.tags, 50) }));
+    s.days = byDay(s.days, (d) => ({
+      top3: list(d.top3, (x) => ({ text: str(x.text, 80), done: !!x.done })).slice(0, 3),
+      blocks: list(d.blocks, (b) => ({ ...b, id: id(b.id), title: str(b.title, 200), color: color(b.color), start: TIME_RE.test(b.start) ? b.start : '09:00', end: TIME_RE.test(b.end) ? b.end : '10:00' })),
+      wins: strings(d.wins, 200).slice(0, 3),
+    }));
+    // Health rows are numbers only (plus their source); anything else could come from a crafted backup
+    s.health = byDay(s.health, (d) => {
+      const out = {};
+      if (isObj(d)) for (const k of Object.keys(d)) if (k === 'src') out.src = oneOf(d.src, ['garmin', 'manual']); else if (typeof d[k] === 'number' && isFinite(d[k])) out[k] = d[k];
+      return out;
+    });
+    s.focus.sessions = list(s.focus.sessions, (x) => ({ ...x, id: id(x.id), start: num(x.start), minutes: num(x.minutes), label: str(x.label, 100) }));
+    if (isObj(s.focus.timer)) s.focus.timer.label = str(s.focus.timer.label, 100);
+    else s.focus.timer = null;
+    return s;
   }
 
   const store = (E.store = {

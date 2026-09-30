@@ -48,7 +48,7 @@
           const st = E.habit.streak(h);
           return `<div class="hg-row">
             <button class="hg-name" data-act="open" data-id="${h.id}">
-              <span class="emoji-badge" style="--c:${h.color}">${h.emoji}</span>
+              <span class="emoji-badge" style="--c:${h.color}">${esc(h.emoji)}</span>
               <div class="row-main"><div class="row-title">${esc(h.name)}</div>
               <div class="row-sub">${st ? `<span class="streak">${E.icon('flame', 12)}${st}</span> · ` : ''}${esc(E.habit.scheduleText(h))}${h.target > 1 ? ` · ${h.target}×` : ''}</div></div>
             </button>
@@ -99,7 +99,7 @@
               .map((h) => [h, E.habit.streak(h), E.habit.best(h), E.habit.rate(h, 30)])
               .sort((a, b) => b[1] - a[1] || b[3] - a[3])
               .map(([h, cur, best, rate]) => `<button class="row streak-row" data-act="open" data-id="${h.id}">
-                <span class="emoji-badge" style="--c:${h.color}">${h.emoji}</span>
+                <span class="emoji-badge" style="--c:${h.color}">${esc(h.emoji)}</span>
                 <div class="row-main"><div class="row-title">${esc(h.name)}</div>${ui.progress(rate, h.color)}</div>
                 <div class="streak-nums"><b>${cur}</b><span>best ${best} · ${E.pct(rate)}</span></div>
               </button>`)
@@ -111,7 +111,7 @@
           archived.length
             ? `<section class="card">
             <button class="card-head as-btn" data-act="toggle-archived"><h2>${E.icon('archive', 18)}Archived <span class="count-pill">${archived.length}</span></h2>${E.icon(this.st.showArchived ? 'down' : 'right', 18)}</button>
-            ${this.st.showArchived ? `<div class="rows">${archived.map((h) => `<button class="row" data-act="open" data-id="${h.id}"><span class="emoji-badge" style="--c:${h.color}">${h.emoji}</span><div class="row-main"><div class="row-title">${esc(h.name)}</div><div class="row-sub">${E.habit.total(h)} completions</div></div>${E.icon('right', 16)}</button>`).join('')}</div>` : ''}
+            ${this.st.showArchived ? `<div class="rows">${archived.map((h) => `<button class="row" data-act="open" data-id="${h.id}"><span class="emoji-badge" style="--c:${h.color}">${esc(h.emoji)}</span><div class="row-main"><div class="row-title">${esc(h.name)}</div><div class="row-sub">${E.habit.total(h)} completions</div></div>${E.icon('right', 16)}</button>`).join('')}</div>` : ''}
           </section>`
             : ''
         }
