@@ -1,5 +1,5 @@
 /* Ember service worker — offline cache for the app shell (only active when served over http/https) */
-const CACHE = 'ember-v10';
+const CACHE = 'ember-v11';
 const SHELL = [
   './', './index.html', './css/app.css', './manifest.webmanifest',
   './assets/icon.svg', './assets/apple-touch-icon.png', './assets/icon-192.png', './assets/icon-512.png',

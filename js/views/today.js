@@ -18,6 +18,59 @@
     st: { phase: null, day: null },
 
     /** Re-render when the phase changes or every few minutes (keeps "now" current), but never while typing. */
+    /** After the dashboard opens: remind about the top 3 once a day if none are set (not in the evening). */
+    after() {
+      const T = E.today(), KEY = 'ember:top3-reminder';
+      if (E.day.phase() === 'evening' || E.day.top3(T).some((x) => x.text.trim())) return;
+      let shown = null;
+      try { shown = localStorage.getItem(KEY); } catch (e) { /* storage blocked */ }
+      if (shown === T) return;
+      clearTimeout(this._remind);
+      this._remind = setTimeout(() => {
+        // Not over the welcome screen or another open sheet, and only if we're still on Today
+        if (document.querySelector('.onboard') || document.getElementById('overlay-root').children.length) return;
+        if (!E.app.current() || E.app.current().view !== 'today') return;
+        try { localStorage.setItem(KEY, T); } catch (e) { /* ignore */ }
+        this.top3Reminder();
+      }, 700);
+    },
+
+    top3Reminder() {
+      const T = E.today(), holders = ['The most important thing', 'Second priority', 'Third priority'];
+      ui.sheet({
+        title: "Today's priorities",
+        size: 'sm',
+        cancel: 'Later',
+        done: 'Save',
+        body: `
+          <div class="remind">
+            <span class="remind-ic">${E.icon('target', 28)}</span>
+            <h3>Don't forget to add your priorities today</h3>
+            <p>What are the three things that would make today a good day?</p>
+          </div>
+          <div class="form-group list-group-inset">${holders
+            .map((h, i) => `<div class="form-row"><span class="win-n">${i + 1}</span><input class="row-input remind-input" data-i="${i}" placeholder="${h}" maxlength="80" enterkeyhint="${i < 2 ? 'next' : 'done'}" aria-label="Priority ${i + 1}" ${i === 0 ? 'autofocus' : ''}></div>`)
+            .join('')}</div>`,
+        mount(api) {
+          api.wrap.addEventListener('keydown', (e) => {
+            if (e.key !== 'Enter' || !e.target.classList.contains('remind-input')) return;
+            e.preventDefault();
+            const next = api.$(`.remind-input[data-i="${+e.target.dataset.i + 1}"]`);
+            next ? next.focus() : api.done();
+          });
+        },
+        onDone(api) {
+          const texts = api.$$('.remind-input').map((x) => x.value.trim());
+          if (!texts.some(Boolean)) return;
+          E.commit(() => {
+            const d = E.day.get(T, true);
+            d.top3 = texts.map((text) => ({ text, done: false }));
+          });
+          ui.toast('Priorities set. Have a great day!', 'target');
+        },
+      });
+    },
+
     stale() {
       return E.day.phase() !== this.lastAuto || Date.now() - (this.lastRender || 0) > 5 * 60e3;
     },

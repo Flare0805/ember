@@ -1409,3 +1409,10 @@ textarea.field-input { margin-top: 10px; line-height: 1.5; }
 .bars.stacked .stack { position: relative; }
 .bars.stacked .bar-col.bad .stack { overflow: visible; }
 .bad-x { position: absolute; top: -16px; left: 50%; transform: translateX(-50%); font-size: 10px; font-weight: 800; color: #ff6961; line-height: 1; }
+
+/* ---------- Morning top-3 reminder ---------- */
+.remind { text-align: center; padding: 6px 8px 14px; }
+.remind-ic { width: 56px; height: 56px; border-radius: 50%; margin: 0 auto 12px; display: grid; place-items: center; background: var(--accent-soft); color: var(--accent); }
+.remind h3 { font-size: 18px; font-weight: 700; margin: 0 0 6px; letter-spacing: -0.01em; }
+.remind p { margin: 0; color: var(--text-2); font-size: 14px; }
+.remind-input { text-align: left !important; color: var(--text) !important; }
