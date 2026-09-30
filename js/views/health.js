@@ -637,9 +637,7 @@
         const lbl = n % 5 === 0 || k === T ? String(n) : '';
         if (!totals[i]) return `<div class="bar-col"><div class="bar-track"></div><span class="bar-lbl">${lbl}</span></div>`;
         const staged = hasStages(d), bad = !!d.sleepBad;
-        const segs = bad
-          ? '<i class="bad-fill"></i>'
-          : staged
+        const segs = staged
             ? STAGES.slice().reverse().filter((x) => d[x.k] > 0).map((x) => `<i style="flex:${d[x.k]} 0 0;background:${x.color}"></i>`).join('')
             : '<i class="nostage"></i>';
         const day = E.fmt(k, { weekday: 'short', month: 'short', day: 'numeric' });
