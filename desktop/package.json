@@ -1,0 +1,46 @@
+{
+  "name": "ember-desktop",
+  "productName": "Ember",
+  "version": "1.0.0",
+  "description": "Ember - journal, habits, goals, books, tasks, focus and health",
+  "main": "main.js",
+  "author": "Flare0805",
+  "license": "UNLICENSED",
+  "private": true,
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder --win nsis --x64"
+  },
+  "build": {
+    "appId": "com.flare0805.ember",
+    "productName": "Ember",
+    "copyright": "Flare0805",
+    "files": [
+      "main.js",
+      "offline.html",
+      "build/icon.png"
+    ],
+    "directories": {
+      "output": "dist",
+      "buildResources": "build"
+    },
+    "win": {
+      "target": "nsis",
+      "icon": "build/icon.png"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Ember",
+      "runAfterFinish": true,
+      "artifactName": "Ember-Setup-${version}.exe"
+    }
+  },
+  "devDependencies": {
+    "electron": "^44.5.1",
+    "electron-builder": "^26.15.3"
+  }
+}
