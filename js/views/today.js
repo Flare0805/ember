@@ -71,6 +71,11 @@
     lastNightCard(T) {
       const H = E.health, s = E.db(), d = s.health[T], auto = !!H.cloud.key(), synced = s.settings.healthImportedAt;
       const head = `<header class="card-head"><h2>${E.icon('moon', 18)}Last night</h2><a class="link" href="#/health">Health${E.icon('right', 15)}</a></header>`;
+      if (d && d.sleepBad)
+        return `<section class="card">${head}
+          <div class="card-empty">✕ You marked last night's sleep as recorded wrong by the watch, so it's left out of your stats.</div>
+          <div class="btn-row"><button class="btn btn-plain sm" data-act="night-restore">${E.icon('check', 14)}Count it again</button></div>
+        </section>`;
       if (!d || d.sleep == null)
         return `<section class="card">${head}
           <div class="card-empty">${
@@ -472,6 +477,7 @@
         E.focus.toggle();
       },
       'health-log': () => E.health.logSheet(),
+      'night-restore': () => E.health.toggleBadNight(E.today()),
       cloud: () => E.health.cloudSheet(),
       async 'sync-now'(el) {
         el.disabled = true;

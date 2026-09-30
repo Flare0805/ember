@@ -24,6 +24,7 @@
     { k: 'rem', label: 'REM sleep', icon: 'moon', color: '#A55FE3', better: 1, fmt: hm, axis: (v) => `${(v / 60).toFixed(1)}h`, lo: 0, hi: 1080, extra: true, hint: 'REM sleep last night' },
   ];
   const MAIN = METRICS.filter((m) => !m.extra);
+  const SLEEP_KEYS = ['sleep', 'sleepScore', 'deep', 'light', 'rem', 'awake'];
 
   /* Sleep stages, stacked bottom → top. Colors validated for the dark surface (lightness band, CVD, contrast). */
   const STAGES = [
@@ -46,9 +47,22 @@
     metric: (k) => METRICS.find((m) => m.k === k),
     prod: (k) => PROD.find((m) => m.k === k),
     fmt: (m, v) => (v == null ? '—' : m.fmt(v) + (m.unit || '')),
+    /** Value for stats. Sleep values of a night marked as a watch error count as missing everywhere. */
     val(k, mk) {
       const d = E.db().health[k], v = d && d[mk];
+      if (d && d.sleepBad && SLEEP_KEYS.includes(mk)) return null;
       return typeof v === 'number' && isFinite(v) ? v : null;
+    },
+    /** Cross out / restore a night whose sleep the watch didn't record correctly. */
+    toggleBadNight(k) {
+      let bad = false;
+      E.commit((s) => {
+        const d = s.health[k];
+        if (!d) return;
+        bad = d.sleepBad = !d.sleepBad;
+        if (!bad) delete d.sleepBad;
+      });
+      ui.toast(bad ? `${E.fmtShort(k)}: sleep ignored in stats` : `${E.fmtShort(k)}: sleep counted again`, bad ? 'x' : 'check');
     },
     keys: () => Object.keys(E.db().health).sort(),
     latestKey() {
@@ -447,6 +461,7 @@
         </div>
         <div class="form-note">Copy the numbers from the Garmin Connect app. Leave anything blank you don't track. Sleep belongs to the day you woke up.</div>
         <div class="form-group list-group-inset">${MAIN.map(inp).join('')}</div>
+        <div class="form-group list-group-inset"><div class="form-row"><div><div class="form-row-title">${E.icon('x', 16)} Watch recorded sleep wrong</div><div class="form-row-sub">Leave this night's sleep out of all stats and charts</div></div>${ui.toggle('data-bad', !!d.sleepBad)}</div></div>
         ${E.db().health[k] ? `<button class="btn btn-danger wide" data-act="del">${E.icon('trash', 16)}Delete this day</button>` : ''}`;
       const read = (api) => {
         const out = {};
@@ -484,7 +499,7 @@
           },
         },
         onDone(api) {
-          const raw = read(api), c = H.clean(raw);
+          const raw = read(api), c = H.clean(raw), bad = api.$('[data-bad]').checked;
           const rejected = Object.keys(raw).filter((x) => !(x in c));
           if (rejected.length) {
             ui.toast(`Check ${rejected.map((x) => H.metric(x).label).join(', ')} — out of range`, 'info');
@@ -495,6 +510,8 @@
             const day = { ...(s.health[k] || {}) };
             MAIN.forEach((m) => delete day[m.k]);
             Object.assign(day, c);
+            if (bad) day.sleepBad = true;
+            else delete day.sleepBad;
             const hasData = [...MAIN, ...STAGES].some((m) => day[m.k] != null);
             if (!hasData) delete s.health[k];
             else s.health[k] = { ...day, src: 'manual', at: Date.now() };
@@ -619,13 +636,18 @@
         const d = s[k], n = E.parse(k).getDate();
         const lbl = n % 5 === 0 || k === T ? String(n) : '';
         if (!totals[i]) return `<div class="bar-col"><div class="bar-track"></div><span class="bar-lbl">${lbl}</span></div>`;
-        const staged = hasStages(d);
-        const segs = staged
-          ? STAGES.slice().reverse().filter((x) => d[x.k] > 0).map((x) => `<i style="flex:${d[x.k]} 0 0;background:${x.color}"></i>`).join('')
-          : '<i class="nostage"></i>';
-        const tip = `${E.fmt(k, { weekday: 'short', month: 'short', day: 'numeric' })}: ${hm(d.sleep || totals[i])} asleep${staged ? ' · ' + STAGES.map((x) => `${x.label} ${hm(d[x.k] || 0)}`).join(' · ') : ''}`;
-        return `<div class="bar-col ${k === T ? 'hi' : ''}" data-tip="${esc(tip)}" tabindex="0">
-          <div class="bar-track"><div class="stack" style="height:${Math.min(100, (totals[i] / (maxH * 60)) * 100).toFixed(1)}%">${segs}</div></div>
+        const staged = hasStages(d), bad = !!d.sleepBad;
+        const segs = bad
+          ? '<i class="bad-fill"></i>'
+          : staged
+            ? STAGES.slice().reverse().filter((x) => d[x.k] > 0).map((x) => `<i style="flex:${d[x.k]} 0 0;background:${x.color}"></i>`).join('')
+            : '<i class="nostage"></i>';
+        const day = E.fmt(k, { weekday: 'short', month: 'short', day: 'numeric' });
+        const tip = bad
+          ? `${day}: ignored (watch didn't record correctly) · tap to change`
+          : `${day}: ${hm(d.sleep || totals[i])} asleep${staged ? ' · ' + STAGES.map((x) => `${x.label} ${hm(d[x.k] || 0)}`).join(' · ') : ''} · tap for options`;
+        return `<div class="bar-col ${k === T ? 'hi' : ''} ${bad ? 'bad' : ''}" data-tip="${esc(tip)}" data-act="night" data-date="${k}" role="button" tabindex="0" aria-label="${esc(tip)}">
+          <div class="bar-track"><div class="stack" style="height:${Math.min(100, (totals[i] / (maxH * 60)) * 100).toFixed(1)}%">${bad ? '<span class="bad-x">✕</span>' : ''}${segs}</div></div>
           <span class="bar-lbl">${lbl}</span></div>`;
       })
       .join('');
@@ -637,7 +659,10 @@
   function sleepCard(avg30) {
     const T = E.today(), s = E.db().health;
     let lnKey = null;
-    for (let i = 0; i < 3 && !lnKey; i++) if (hasStages(s[E.addDays(T, -i)])) lnKey = E.addDays(T, -i);
+    for (let i = 0; i < 3 && !lnKey; i++) {
+      const d = s[E.addDays(T, -i)];
+      if (hasStages(d) && !d.sleepBad) lnKey = E.addDays(T, -i);
+    }
     const days = Array.from({ length: 30 }, (_, i) => E.addDays(T, i - 29));
     const anyStages = days.some((k) => hasStages(s[k]));
     return `<section class="card sleep-card">
@@ -645,7 +670,7 @@
       ${lnKey ? lastNight(lnKey) : ''}
       ${anyStages ? stageBars(days) : trend(H.metric('sleep'))}
       ${anyStages && !lnKey ? `<div class="stage-legend">${STAGES.map((x) => `<span><i style="background:${x.color}"></i>${x.label}</span>`).join('')}</div>` : ''}
-      <div class="chart-note">${anyStages ? 'Each bar is one night split into sleep stages. Hover or tap a bar for the details.' : 'Time asleep per night. Sleep stages appear after a Garmin import.'}</div>
+      <div class="chart-note">${anyStages ? 'Each bar is one night split into sleep stages. Tap a bar to cross out a night your watch got wrong (✕ = left out of all stats).' :'Time asleep per night. Sleep stages appear after a Garmin import.'}</div>
     </section>`;
   }
 
@@ -757,7 +782,7 @@
               ? `<div class="h-table-wrap"><table class="h-table">
                   <thead><tr><th>Day</th>${MAIN.map((x) => `<th>${x.label}</th>`).join('')}</tr></thead>
                   <tbody>${recent
-                    .map((k) => `<tr data-act="edit" data-date="${k}" tabindex="0"><td>${E.relDay(k)}${s.health[k].src === 'manual' ? ' <span class="src">manual</span>' : ''}</td>${MAIN.map((x) => `<td>${H.val(k, x.k) == null ? '<span class="muted">—</span>' : x.fmt(H.val(k, x.k))}</td>`).join('')}</tr>`)
+                    .map((k) => `<tr data-act="edit" data-date="${k}" tabindex="0"><td>${E.relDay(k)}${s.health[k].src === 'manual' ? ' <span class="src">manual</span>' : ''}</td>${MAIN.map((x) => `<td>${s.health[k].sleepBad && SLEEP_KEYS.includes(x.k) ? '<span class="muted" title="Ignored: watch error">✕</span>' : H.val(k, x.k) == null ? '<span class="muted">—</span>' : x.fmt(H.val(k, x.k))}</td>`).join('')}</tr>`)
                     .join('')}</tbody></table></div>`
               : `<div class="card-empty">Nothing in the last 14 days.</div>`
           }
@@ -770,6 +795,13 @@
       help: () => H.cloudSheet(),
       import: () => H.pickFile(),
       edit: (el) => H.logSheet(el.dataset.date),
+      night(el) {
+        const k = el.dataset.date, bad = !!(E.db().health[k] || {}).sleepBad;
+        ui.menu(el, [
+          { label: bad ? 'Count this night again' : "Wrong data – ignore this night", icon: bad ? 'check' : 'x', onClick: () => H.toggleBadNight(k) },
+          { label: `Edit ${E.fmtShort(k)}`, icon: 'edit', onClick: () => H.logSheet(k) },
+        ]);
+      },
       metric(el) {
         V.st.metric = el.dataset.value;
         V.st.x = el.dataset.value;
