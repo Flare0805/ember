@@ -31,6 +31,9 @@ http
     try {
       urlPath = decodeURIComponent(req.url.split('?')[0]);
     } catch (e) {
+      urlPath = null;
+    }
+    if (urlPath === null || urlPath.includes('\0')) {
       res.writeHead(400);
       return res.end();
     }
@@ -45,7 +48,7 @@ http
         res.writeHead(404, { 'Content-Type': 'text/plain' });
         return res.end('Not found');
       }
-      res.writeHead(200, { 'Content-Type': TYPES[path.extname(rel)] || 'application/octet-stream', 'Cache-Control': 'no-cache' });
+      res.writeHead(200, { 'Content-Type': TYPES[path.extname(rel)] || 'application/octet-stream', 'Cache-Control': 'no-cache', 'X-Content-Type-Options': 'nosniff' });
       res.end(data);
     });
   })
