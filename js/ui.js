@@ -207,7 +207,8 @@
       tipEl.className = 'tip';
       document.body.appendChild(tipEl);
     }
-    tipEl.innerHTML = target.dataset.tip;
+    // Attribute values come back entity-decoded, so a tip must never be parsed as HTML again
+    tipEl.textContent = target.dataset.tip;
     tipEl.classList.add('show');
     const r = target.getBoundingClientRect();
     const w = tipEl.offsetWidth, h = tipEl.offsetHeight;
@@ -327,9 +328,13 @@
     const pal = COVERS[E.hash((b.title || '') + (b.author || '')) % COVERS.length];
     return `<div class="cover ${cls}" style="--c1:${pal[0]};--c2:${pal[1]}">
       <div class="cover-gen"><div class="cover-title">${esc(b.title || 'Untitled')}</div><div class="cover-author">${esc(b.author || '')}</div></div>
-      ${b.cover ? `<img src="${esc(b.cover)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.remove()" onload="if(this.naturalWidth<10)this.remove()">` : ''}
+      ${b.cover ? `<img class="cover-img" src="${esc(b.cover)}" alt="" loading="lazy" referrerpolicy="no-referrer">` : ''}
     </div>`;
   };
+  // Drop covers that fail to load or come back as a 1×1 placeholder (no inline handlers: the CSP forbids them)
+  const coverImg = (e) => (e.target.classList && e.target.classList.contains('cover-img') ? e.target : null);
+  document.addEventListener('error', (e) => { const img = coverImg(e); if (img) img.remove(); }, true);
+  document.addEventListener('load', (e) => { const img = coverImg(e); if (img && img.naturalWidth < 10) img.remove(); }, true);
 
   /** Tappable habit day cell: shows a partial ring for counted habits, a check when complete. */
   ui.habitCell = (h, k, { size = 34, act = 'habit-tap', due = true } = {}) => {
