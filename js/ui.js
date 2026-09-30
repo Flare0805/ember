@@ -301,7 +301,7 @@
   ui.toggle = (attrs, on) => `<label class="switch"><input type="checkbox" ${attrs} ${on ? 'checked' : ''}><span class="switch-track"><span class="switch-thumb"></span></span></label>`;
 
   ui.stepper = (act, value, suffix = '') =>
-    `<div class="stepper"><button type="button" data-act="${act}" data-delta="-1" aria-label="Decrease">${E.icon('minus', 16)}</button><span class="stepper-val">${value}${suffix}</span><button type="button" data-act="${act}" data-delta="1" aria-label="Increase">${E.icon('plus', 16)}</button></div>`;
+    `<div class="stepper"><button type="button" data-act="${act}" data-delta="-1" aria-label="Decrease">${E.icon('minus', 16)}</button><span class="stepper-val">${esc(value)}${esc(suffix)}</span><button type="button" data-act="${act}" data-delta="1" aria-label="Increase">${E.icon('plus', 16)}</button></div>`;
 
   ui.emojiGrid = (selected, act = 'pick-emoji') =>
     `<div class="emoji-grid">${E.EMOJIS.map((e) => `<button type="button" class="emoji-opt ${e === selected ? 'on' : ''}" data-act="${act}" data-value="${e}">${e}</button>`).join('')}</div>`;
@@ -316,7 +316,7 @@
     `<button type="button" class="check ${on ? 'on' : ''}" style="--c:${color}" ${attrs} aria-pressed="${on}" aria-label="${on ? 'Mark as not done' : 'Mark as done'}">${E.icon('check', 14)}</button>`;
 
   ui.stars = (rating, act = '', size = 16) =>
-    `<div class="stars ${act ? 'interactive' : ''}" ${act ? '' : `aria-label="${rating} of 5 stars"`}>${[1, 2, 3, 4, 5]
+    `<div class="stars ${act ? 'interactive' : ''}" ${act ? '' : `aria-label="${Number(rating) || 0} of 5 stars"`}>${[1, 2, 3, 4, 5]
       .map((i) => (act ? `<button type="button" class="star ${i <= rating ? 'on' : ''}" data-act="${act}" data-value="${i}" aria-label="${i} stars">${E.icon('star', size)}</button>` : `<span class="star ${i <= rating ? 'on' : ''}">${E.icon('star', size)}</span>`))
       .join('')}</div>`;
 

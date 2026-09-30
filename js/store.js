@@ -54,6 +54,7 @@
   const isObj = (v) => !!v && typeof v === 'object' && !Array.isArray(v);
   const str = (v, max = 5000) => (v == null ? '' : String(v).slice(0, max));
   const num = (v, fb = 0) => (typeof v === 'number' && isFinite(v) ? v : fb);
+  const int = (v, lo, hi, fb = lo) => (typeof v === 'number' && isFinite(v) ? E.clamp(Math.round(v), lo, hi) : fb);
   const oneOf = (v, list, fb = list[0]) => (list.includes(v) ? v : fb);
   const id = (v) => (typeof v === 'string' && ID_RE.test(v) ? v : E.uid());
   const day = (v, fb = null) => (typeof v === 'string' && DAY_RE.test(v) ? v : fb);
@@ -69,7 +70,16 @@
   };
 
   function sanitize(s) {
-    s.settings.name = str(s.settings.name, 60);
+    const st = s.settings, base = defaults().settings;
+    st.name = str(st.name, 60);
+    // Numbers are rendered as-is by steppers, counters and progress bars, so they must really be numbers in range
+    st.readingGoal = int(st.readingGoal, 1, 365, base.readingGoal);
+    st.focus.work = int(st.focus.work, 5, 120, base.focus.work);
+    st.focus.short = int(st.focus.short, 1, 30, base.focus.short);
+    st.focus.long = int(st.focus.long, 5, 60, base.focus.long);
+    st.focus.every = int(st.focus.every, 2, 8, base.focus.every);
+    st.phases.morningEnd = int(st.phases.morningEnd, 7, 14, base.phases.morningEnd);
+    st.phases.eveningStart = int(st.phases.eveningStart, 15, 23, base.phases.eveningStart);
     s.habits = list(s.habits, (h) => ({
       ...h, id: id(h.id), name: str(h.name, 200), emoji: emoji(h.emoji, '⭐'), color: color(h.color),
       days: Array.isArray(h.days) ? h.days.map(Number).filter((d) => d >= 0 && d <= 6) : [0, 1, 2, 3, 4, 5, 6],
@@ -78,17 +88,19 @@
     s.goals = list(s.goals, (g) => ({
       ...g, id: id(g.id), title: str(g.title, 200), description: str(g.description), emoji: emoji(g.emoji, E.cat(g.category).emoji),
       status: oneOf(g.status, ['planned', 'active', 'done']), deadline: day(g.deadline), unit: str(g.unit, 12).replace(/[<>&"']/g, ''),
+      progress: int(g.progress, 0, 100, 0), target: Math.max(0, num(g.target)),
       milestones: list(g.milestones, (m) => ({ ...m, id: id(m.id), title: str(m.title, 200), done: !!m.done })),
       entries: list(g.entries, (x) => ({ ...x, id: id(x.id), note: str(x.note, 200), amount: num(x.amount), date: day(x.date, E.today()) })),
     }));
     s.books = list(s.books, (b) => ({
       ...b, id: id(b.id), title: str(b.title, 300), author: str(b.author, 200), notes: str(b.notes), cover: url(b.cover),
       status: oneOf(b.status, ['want', 'reading', 'finished']), finishedAt: day(b.finishedAt), startedAt: day(b.startedAt), quotes: strings(b.quotes, 1000),
+      pages: int(b.pages, 0, 1e6, 0), currentPage: int(b.currentPage, 0, 1e6, 0), rating: int(b.rating, 0, 5, 0),
     }));
     s.lists = list(s.lists, (l) => ({ ...l, id: id(l.id), name: str(l.name, 100), color: color(l.color) }));
     if (!s.lists.length) s.lists = defaults().lists;
-    s.tasks = list(s.tasks, (t) => ({ ...t, id: id(t.id), title: str(t.title, 500), notes: str(t.notes), listId: str(t.listId, 40), due: day(t.due) }));
-    s.journal = list(s.journal, (j) => ({ ...j, id: id(j.id), date: day(j.date, E.today()), title: str(j.title, 300), body: str(j.body, 100000), tags: strings(j.tags, 50) }));
+    s.tasks = list(s.tasks, (t) => ({ ...t, id: id(t.id), title: str(t.title, 500), notes: str(t.notes), listId: str(t.listId, 40), due: day(t.due), priority: int(t.priority, 0, 3, 0) }));
+    s.journal = list(s.journal, (j) => ({ ...j, id: id(j.id), date: day(j.date, E.today()), title: str(j.title, 300), body: str(j.body, 100000), tags: strings(j.tags, 50), mood: oneOf(j.mood, [null, 1, 2, 3, 4, 5]) }));
     s.days = byDay(s.days, (d) => ({
       top3: list(d.top3, (x) => ({ text: str(x.text, 80), done: !!x.done })).slice(0, 3),
       blocks: list(d.blocks, (b) => ({ ...b, id: id(b.id), title: str(b.title, 200), color: color(b.color), start: TIME_RE.test(b.start) ? b.start : '09:00', end: TIME_RE.test(b.end) ? b.end : '10:00' })),
@@ -101,7 +113,8 @@
       return out;
     });
     s.focus.sessions = list(s.focus.sessions, (x) => ({ ...x, id: id(x.id), start: num(x.start), minutes: num(x.minutes), label: str(x.label, 100) }));
-    if (isObj(s.focus.timer)) s.focus.timer.label = str(s.focus.timer.label, 100);
+    const t = s.focus.timer;
+    if (isObj(t)) Object.assign(t, { mode: oneOf(t.mode, ['work', 'short', 'long']), label: str(t.label, 100), endAt: num(t.endAt), remaining: num(t.remaining), cycle: int(t.cycle, 0, 99, 0), running: !!t.running });
     else s.focus.timer = null;
     return s;
   }

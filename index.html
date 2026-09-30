@@ -2,8 +2,8 @@
 <html lang="en" data-theme="graphite">
 <head>
   <meta charset="utf-8">
-  <!-- Only our own scripts may run; inline handlers are blocked. Inline style attributes stay allowed (the UI uses them for colors). -->
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https:; connect-src 'self' https://api.open-meteo.com https://geocoding-api.open-meteo.com https://openlibrary.org; object-src 'none'; base-uri 'self'; form-action 'self'">
+  <!-- Only our own scripts may run; inline handlers are blocked. Inline style="" attributes stay allowed (the UI uses them for colors), injected <style> elements do not. -->
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' https://fonts.googleapis.com; style-src-elem 'self' https://fonts.googleapis.com; style-src-attr 'unsafe-inline'; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https:; connect-src 'self' https://api.open-meteo.com https://geocoding-api.open-meteo.com https://openlibrary.org; object-src 'none'; base-uri 'self'; form-action 'self'">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#161618">
   <meta name="color-scheme" content="dark">

@@ -16,7 +16,7 @@
       t = setTimeout(() => fn(...a), ms);
     };
   };
-  E.plural = (n, word, pl) => `${n} ${n === 1 ? word : pl || word + 's'}`;
+  E.plural = (n, word, pl) => `${Number(n)} ${n === 1 ? word : pl || word + 's'}`;
   E.hash = (str) => {
     let h = 7;
     for (const ch of String(str)) h = (h * 31 + ch.charCodeAt(0)) | 0;
